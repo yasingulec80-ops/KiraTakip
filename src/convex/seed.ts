@@ -155,14 +155,16 @@ export const seedDemoData = mutation({
       await refreshAccrualStatus(ctx, accrualId);
     }
 
-    // Depozito tahsilatı — kiracı öder, cari hesaplara işlenir.
+    // Depozito tahsilatı — kiracı öder, vekil tahsil eder, cari hesaplara işlenir.
+    // İade, Depozitolar modülünden vekil üzerinden yapılabilir (devir akışına işlenir).
     await createCollectionWithLedger(ctx, actor, contract, {
       amount: contract.depositAmount,
       date: at(2026, 7, 1),
       paidByType: "tenant",
       tenantId,
       collectionType: "deposit",
-      notes: "Depozito tahsilatı (deneme)",
+      collectedByProxyOwnerId: ownerId,
+      notes: "Depozito tahsilatı (vekil tahsil etti)",
     });
 
     /* ----------------------------- Masraflar --------------------------- */

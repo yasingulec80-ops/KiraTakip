@@ -18,7 +18,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { api } from "@/convex/_generated/api";
-import type { Doc } from "@/convex/_generated/dataModel";
+import type { Doc, Id } from "@/convex/_generated/dataModel";
 import {
   dateToInput,
   downloadCsv,
@@ -66,6 +66,7 @@ export function DepositSection() {
   const properties = useQuery(api.properties.list);
   const owners = useQuery(api.owners.list);
   const tenants = useQuery(api.tenants.list);
+  const collections = useQuery(api.collections.list);
   const returnDeposit = useMutation(api.contracts.returnDeposit);
 
   const [search, setSearch] = useState("");
@@ -176,7 +177,12 @@ export function DepositSection() {
     toast.success("PDF dökümü hazırlanıyor.");
   };
 
-  const handleReturn = async (contract: Contract, date: string, note: string) => {
+  const handleReturn = async (
+    contract: Contract,
+    date: string,
+    note: string,
+    returnedByOwnerId: string,
+  ) => {
     const returnedAt = parseDateInput(date);
     if (!returnedAt) {
       toast.error("İade tarihi zorunludur.");
@@ -187,10 +193,13 @@ export function DepositSection() {
         contractId: contract._id,
         date: returnedAt,
         note: note.trim() || undefined,
+        returnedByProxyOwnerId: returnedByOwnerId
+          ? (returnedByOwnerId as Id<"owners">)
+          : undefined,
       });
       toast.success(
         result.entriesPosted > 0
-          ? "Depozito iadesi işlendi; kiracı ve malik cari hesaplarına kaydedildi."
+          ? "Depozito iadesi işlendi; cari hesaplara kaydedildi."
           : "Depozito iade edildi olarak işaretlendi.",
       );
       setReturning(null);
@@ -205,6 +214,31 @@ export function DepositSection() {
   const returningTenant = returning
     ? tenantMap.get(returning.tenantId.toString())
     : undefined;
+
+  // Depozitoyu tahsil eden vekiller — iade bu vekiller üzerinden yapılabilir.
+  const returningCollectingVekils = useMemo(() => {
+    if (!returning) return [];
+    const seen = new Set<string>();
+    const list: { ownerId: string; name: string }[] = [];
+    (collections ?? [])
+      .filter(
+        (c) =>
+          c.contractId.toString() === returning._id.toString() &&
+          (c.collectionType ?? "rent") === "deposit" &&
+          c.collectedByProxyOwnerId,
+      )
+      .forEach((c) => {
+        const ownerId = c.collectedByProxyOwnerId!.toString();
+        if (seen.has(ownerId)) return;
+        seen.add(ownerId);
+        const owner = ownerMap.get(ownerId);
+        list.push({
+          ownerId,
+          name: owner?.proxy?.name ?? owner?.name ?? "Vekil",
+        });
+      });
+    return list;
+  }, [returning, collections, ownerMap]);
 
   return (
     <section className="space-y-6">
@@ -378,6 +412,7 @@ export function DepositSection() {
         contract={returning}
         property={returningProperty}
         tenant={returningTenant}
+        collectingVekils={returningCollectingVekils}
         onOpenChange={(open) => !open && setReturning(null)}
         onConfirm={handleReturn}
       />
@@ -391,23 +426,29 @@ function DepositReturnDialog({
   contract,
   property,
   tenant,
+  collectingVekils,
   onOpenChange,
   onConfirm,
 }: {
   contract: Contract | null;
   property?: Property;
   tenant?: Tenant;
+  collectingVekils: { ownerId: string; name: string }[];
   onOpenChange: (open: boolean) => void;
-  onConfirm: (contract: Contract, date: string, note: string) => void;
+  onConfirm: (contract: Contract, date: string, note: string, returnedByOwnerId: string) => void;
 }) {
-  const [form, setForm] = useState({ date: TODAY, note: "" });
+  const [form, setForm] = useState({
+    date: TODAY,
+    note: "",
+    returnedBy: "office",
+  });
   const [error, setError] = useState<string | null>(null);
 
   const [lastKey, setLastKey] = useState("");
   const key = contract ? contract._id.toString() : "closed";
   if (key !== lastKey) {
     setLastKey(key);
-    setForm({ date: TODAY, note: "" });
+    setForm({ date: TODAY, note: "", returnedBy: "office" });
     setError(null);
   }
 
@@ -417,7 +458,12 @@ function DepositReturnDialog({
       setError("İade tarihi zorunludur.");
       return;
     }
-    onConfirm(contract, form.date, form.note);
+    onConfirm(
+      contract,
+      form.date,
+      form.note,
+      form.returnedBy === "office" ? "" : form.returnedBy,
+    );
   };
 
   return (
@@ -460,6 +506,31 @@ function DepositReturnDialog({
           tespit edildiğinde kiracıya iade edilir. İade tarihini ve varsa
           notu girin.
         </p>
+        {collectingVekils.length > 0 && (
+          <Field
+            label="İadeyi Kim Yapıyor?"
+            hint="vekil seçilirse devir akışına işlenir"
+          >
+            <Select
+              value={form.returnedBy}
+              onValueChange={(value) =>
+                setForm((f) => ({ ...f, returnedBy: value }))
+              }
+            >
+              <SelectTrigger className="rounded-none">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="office">Malik / Ofis üzerinden</SelectItem>
+                {collectingVekils.map((v) => (
+                  <SelectItem key={v.ownerId} value={v.ownerId}>
+                    Vekil · {v.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+        )}
         <Field label="İade Tarihi" required>
           <Input
             type="date"
@@ -476,6 +547,14 @@ function DepositReturnDialog({
             className="rounded-none"
           />
         </Field>
+        {collectingVekils.length > 0 && (
+          <p className="text-xs leading-5 text-muted-foreground">
+            Depozito bu vekil tarafından tahsil edilmişti. Vekil üzerinden
+            iade seçilirse vekilin cari hesabındaki borç devir olarak kapanır;
+            aksi halde vekilin borcu korunur ve tahsil ettiği tutarı ayrıca
+            malike devredebilir.
+          </p>
+        )}
       </div>
     </DialogShell>
   );

@@ -161,8 +161,10 @@ export const returnDeposit = mutation({
     contractId: v.id("contracts"),
     date: v.number(),
     note: v.optional(v.string()),
+    returnedByProxyOwnerId: v.optional(v.id("owners")), // vekil üzerinden iade
   },
-  handler: async (ctx, { contractId, date, note }) => {
+  handler: async (ctx, args) => {
+    const { contractId, date, note } = args;
     const actor = await requireActor(ctx);
     const contract = await ctx.db.get(contractId);
     if (!contract) throw new ConvexError("Kontrat bulunamadı.");
@@ -216,27 +218,55 @@ export const returnDeposit = mutation({
     });
     entriesPosted += 2;
 
-    // Depozitoyu tahsil eden vekil varsa borcu kapatılır (tahsil ettiği tutar kadar).
-    const byVekil = new Map<string, number>();
-    for (const c of depositCollections) {
-      if (!c.collectedByProxyOwnerId) continue;
-      const key = c.collectedByProxyOwnerId.toString();
-      byVekil.set(key, (byVekil.get(key) ?? 0) + c.amount);
-    }
-    for (const [ownerId, amount] of byVekil) {
-      await postLedgerEntry(ctx, actor, {
-        propertyId: contract.propertyId,
-        contractId: contract._id,
-        personType: "proxy",
-        personId: ownerId as Id<"owners">,
-        ownerId: ownerId as Id<"owners">,
-        kind: "depositReturn",
-        amount,
-        description: "Depozito iadesi (vekil)",
-        date,
-        referenceId,
-      });
-      entriesPosted += 1;
+    // Vekil üzerinden iade: depozitoyu tahsil eden vekil iadeyi yaparsa,
+    // vekilin cari hesabındaki borç devir (transfer) olarak kapatılır ve
+    // tutar vekilin teslim edilebilir bakiyesinden düşülür. Vekil seçilmezse
+    // vekilin borcu korunur; tahsil ettiği tutarı ayrıca malike devredebilir.
+    const proxyOwnerId = args.returnedByProxyOwnerId;
+    if (proxyOwnerId) {
+      const vekilOwner = await ctx.db.get(proxyOwnerId);
+      if (vekilOwner?.proxy) {
+        const vekilPortion = depositCollections
+          .filter(
+            (c) => c.collectedByProxyOwnerId?.toString() === proxyOwnerId.toString(),
+          )
+          .reduce((sum, c) => sum + c.amount, 0);
+
+        // Vekilin tahsil edip henüz devretmediği toplam tutar (devir akışıyla aynı hesap).
+        const vekilEntries = await ctx.db
+          .query("ledgerEntries")
+          .withIndex("by_person", (q) =>
+            q.eq("personType", "proxy").eq("personId", proxyOwnerId),
+          )
+          .collect();
+        const outstanding = vekilEntries.reduce((sum, e) => {
+          if (
+            e.kind === "collection" &&
+            e.description.startsWith("Vekil tahsilatı")
+          ) {
+            return sum + Math.abs(e.amount);
+          }
+          if (e.kind === "transfer") return sum - e.amount;
+          return sum;
+        }, 0);
+
+        const clearAmount = Math.min(vekilPortion, outstanding, totalCollected);
+        if (clearAmount > 0) {
+          await postLedgerEntry(ctx, actor, {
+            propertyId: contract.propertyId,
+            contractId: contract._id,
+            personType: "proxy",
+            personId: proxyOwnerId,
+            ownerId: proxyOwnerId,
+            kind: "transfer",
+            amount: clearAmount,
+            description: "Vekil devri — depozito iadesi",
+            date,
+            referenceId,
+          });
+          entriesPosted += 1;
+        }
+      }
     }
 
     return { entriesPosted };
