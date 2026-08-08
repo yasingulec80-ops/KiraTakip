@@ -544,6 +544,14 @@ function OwnerFormDialog({
                 className="rounded-none"
               />
             </Field>
+            <Field label="Şirket Adresi">
+              <Input
+                value={form.address}
+                onChange={(e) => set("address", e.target.value)}
+                placeholder="Şirketin merkez adresi"
+                className="rounded-none"
+              />
+            </Field>
           </div>
         ) : (
           <Row>
@@ -586,14 +594,16 @@ function OwnerFormDialog({
           </Field>
         </Row>
 
-        <Field label="Adresi">
-          <Input
-            value={form.address}
-            onChange={(e) => set("address", e.target.value)}
-            placeholder="Malikin ikamet adresi"
-            className="rounded-none"
-          />
-        </Field>
+        {!form.isCompany && (
+          <Field label="Adresi">
+            <Input
+              value={form.address}
+              onChange={(e) => set("address", e.target.value)}
+              placeholder="Malikin ikamet adresi"
+              className="rounded-none"
+            />
+          </Field>
+        )}
 
         <Row>
           <Field label="Banka Adı">
