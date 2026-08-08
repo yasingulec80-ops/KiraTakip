@@ -95,6 +95,7 @@ const SUMMARY_HEADERS = [
   "Kişi",
   "Tahsil Edilen Kira",
   "Tahsil Edilen Depozito",
+  "Vekil Borç",
   "Kira Devri",
   "Depozito Devri",
   "Borç",
@@ -284,6 +285,7 @@ export function LedgerSection() {
       a.name,
       t.collectedRent,
       t.collectedDeposit,
+      a.personType === "proxy" ? t.collectedRent + t.collectedDeposit : 0,
       t.rentTransfer,
       t.depositTransfer,
       a.balance < 0 ? -a.balance : 0,
@@ -420,6 +422,7 @@ export function LedgerSection() {
                 <TableRow className="hover:bg-transparent">
                   <TableHead>Tür</TableHead>
                   <TableHead className="min-w-44">Kişi</TableHead>
+                  <TableHead className="text-right">Vekil Borç</TableHead>
                   <TableHead className="text-right">Borç</TableHead>
                   <TableHead className="text-right">Alacak</TableHead>
                   <TableHead className="text-right">Bakiye</TableHead>
@@ -427,41 +430,57 @@ export function LedgerSection() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {accounts.map((a) => (
-                  <TableRow
-                    key={a.key}
-                    className="cursor-pointer align-middle hover:bg-muted/40"
-                    onClick={() => setViewing(a)}
-                  >
-                    <TableCell>
-                      <Badge
-                        variant={
-                          a.personType === "proxy" ? "outline" : "secondary"
-                        }
-                        className={
-                          a.personType === "proxy"
-                            ? "rounded-none text-brand"
-                            : "rounded-none"
-                        }
-                      >
-                        {PERSON_TYPE_LABEL[a.personType]}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="font-medium">{a.name}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {a.subtitle}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {a.balance < 0 ? (
-                        <span className="text-amber-700">
-                          {formatCurrency(-a.balance)}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
+                {accounts.map((a) => {
+                  const proxyTotals =
+                    a.personType === "proxy" ? summaryTotalsOf(a) : null;
+                  const proxyDebt =
+                    proxyTotals !== null
+                      ? proxyTotals.collectedRent + proxyTotals.collectedDeposit
+                      : 0;
+                  return (
+                    <TableRow
+                      key={a.key}
+                      className="cursor-pointer align-middle hover:bg-muted/40"
+                      onClick={() => setViewing(a)}
+                    >
+                      <TableCell>
+                        <Badge
+                          variant={
+                            a.personType === "proxy" ? "outline" : "secondary"
+                          }
+                          className={
+                            a.personType === "proxy"
+                              ? "rounded-none text-brand"
+                              : "rounded-none"
+                          }
+                        >
+                          {PERSON_TYPE_LABEL[a.personType]}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="font-medium">{a.name}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {a.subtitle}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right font-medium tabular-nums">
+                        {proxyDebt > 0 ? (
+                          <span className="text-amber-700">
+                            {formatCurrency(proxyDebt)}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {a.balance < 0 ? (
+                          <span className="text-amber-700">
+                            {formatCurrency(-a.balance)}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {a.balance > 0 ? (
                         <span className="text-emerald-700">
@@ -518,8 +537,9 @@ export function LedgerSection() {
                         </Button>
                       </div>
                     </TableCell>
-                  </TableRow>
-                ))}
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>
@@ -528,7 +548,10 @@ export function LedgerSection() {
               {accounts.length} hesap gösteriliyor · satıra tıklayınca kayıt
               dökümü açılır
             </span>
-            <span>Pozitif bakiye alacak, negatif bakiye borç anlamına gelir</span>
+            <span>
+              Vekil Borç = tahsil edilen kira + depozito · pozitif bakiye
+              alacak, negatif bakiye borç
+            </span>
           </div>
         </div>
       )}
@@ -721,7 +744,7 @@ function PersonDetailDialog({
           </div>
 
           {hasVekilActivity && (
-            <div className="grid gap-px border border-border bg-border sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-px border border-border bg-border sm:grid-cols-2 lg:grid-cols-5">
               <div className="bg-card p-4">
                 <p className="eyebrow text-muted-foreground">Tahsil Edilen Kira</p>
                 <p className="mt-1.5 font-display text-lg font-light tabular-nums">
@@ -742,6 +765,21 @@ function PersonDetailDialog({
                 </p>
                 <p className="mt-0.5 text-[11px] text-muted-foreground">
                   {collectedDeposit.length} tahsilat kaydı
+                </p>
+              </div>
+              <div className="bg-card p-4">
+                <p className="eyebrow text-amber-700">Vekil Borç</p>
+                <p className="mt-1.5 font-display text-lg font-light tabular-nums text-amber-700">
+                  {formatCurrency(
+                    collectedRent.reduce((s, e) => s + Math.abs(e.amount), 0) +
+                      collectedDeposit.reduce(
+                        (s, e) => s + Math.abs(e.amount),
+                        0,
+                      ),
+                  )}
+                </p>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  tahsil edilen toplam (kira + depozito)
                 </p>
               </div>
               <div className="bg-card p-4">
