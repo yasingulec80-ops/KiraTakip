@@ -78,6 +78,14 @@ const KIND_LABEL: Record<string, string> = {
   transfer: "Devir",
 };
 
+/** Devir kayıtlarını türüne göre ayırır: kira devri / depozito devri. */
+const entryKindLabel = (e: LedgerEntry): string =>
+  e.kind === "transfer"
+    ? e.description.includes("depozito")
+      ? "Depozito Devri"
+      : "Kira Devri"
+    : KIND_LABEL[e.kind];
+
 const TODAY = dateToInput(Date.now());
 
 const SUMMARY_HEADERS = ["Tür", "Kişi", "Borç", "Alacak", "Bakiye"];
@@ -203,7 +211,7 @@ export function LedgerSection() {
   const entryRows = (account: PersonAccount): (string | number | null)[][] =>
     entriesOf(account).map((e) => [
       formatDate(e.date),
-      KIND_LABEL[e.kind],
+      entryKindLabel(e),
       e.description,
       e.amount,
     ]);
@@ -551,13 +559,6 @@ function PersonDetailDialog({
     e.description.includes("depozito"),
   );
 
-  const transferKindLabel = (e: LedgerEntry): string =>
-    e.kind === "transfer"
-      ? e.description.includes("depozito")
-        ? "Depozito Devri"
-        : "Kira Devri"
-      : KIND_LABEL[e.kind];
-
   return (
     <DialogShell
       open={account !== null}
@@ -681,7 +682,7 @@ function PersonDetailDialog({
                               : "rounded-none text-muted-foreground"
                           }
                         >
-                          {transferKindLabel(e)}
+                          {entryKindLabel(e)}
                         </Badge>
                       </TableCell>
                       <TableCell className="max-w-52 truncate text-sm">
