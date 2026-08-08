@@ -97,6 +97,7 @@ export const ledgerKindValidator = v.union(
   v.literal("collection"),
   v.literal("expense"),
   v.literal("adjustment"),
+  v.literal("depositReturn"),
 );
 export type LedgerKind = Infer<typeof ledgerKindValidator>;
 

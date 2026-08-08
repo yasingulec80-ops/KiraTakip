@@ -74,6 +74,7 @@ const KIND_LABEL: Record<string, string> = {
   collection: "Tahsilat",
   expense: "Masraf",
   adjustment: "Düzeltme",
+  depositReturn: "Depozito İadesi",
 };
 
 const TODAY = dateToInput(Date.now());

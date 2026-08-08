@@ -1,6 +1,6 @@
 import { ConvexError, v } from "convex/values";
 import { action, mutation, query } from "./_generated/server";
-import type { Doc } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import {
   ROLES,
@@ -11,6 +11,7 @@ import {
 import {
   getActor,
   getAuthorizedPropertyIds,
+  postLedgerEntry,
   requireActor,
   requirePropertyAccess,
 } from "./ledger_helpers";
@@ -146,7 +147,15 @@ export const remove = mutation({
   },
 });
 
-/** Mark a contract's deposit as returned, recording date and note. */
+/**
+ * Mark a contract's deposit as returned, recording date and note.
+ *
+ * Depozito cari hesaplara işlenmişse iade kaydı da otomatik işlenir:
+ * kiracı borçlanır (−, iade hakkı kapanır), malik alacaklanır (+, depozito
+ * yükümlülüğü kapanır). Depozitoyu tahsil eden vekil varsa vekilin cari
+ * hesabındaki borç da kapatılır (+). Depozito cariye hiç işlenmemişse kayıt
+ * atılmaz (yalnızca kontrat üzerinden izlenir).
+ */
 export const returnDeposit = mutation({
   args: {
     contractId: v.id("contracts"),
@@ -163,7 +172,74 @@ export const returnDeposit = mutation({
       depositReturnedAt: date,
       depositNote: note,
     });
-    return true;
+
+    // Depozito türündeki tahsilatlar — cari hesaplara işlenen tutarın kaynağı.
+    const allCollections = await ctx.db
+      .query("collections")
+      .withIndex("by_contract", (q) => q.eq("contractId", contractId))
+      .collect();
+    const depositCollections = allCollections.filter(
+      (c) => (c.collectionType ?? "rent") === "deposit",
+    );
+    const totalCollected = depositCollections.reduce(
+      (sum, c) => sum + c.amount,
+      0,
+    );
+    if (totalCollected <= 0) return { entriesPosted: 0 };
+
+    const referenceId = `${contractId.toString()}:deposit-return`;
+    let entriesPosted = 0;
+
+    // Kiracı borçlanır — depozito iadesi alınmıştır.
+    await postLedgerEntry(ctx, actor, {
+      propertyId: contract.propertyId,
+      contractId: contract._id,
+      personType: "tenant",
+      personId: contract.tenantId,
+      kind: "depositReturn",
+      amount: -totalCollected,
+      description: "Depozito iadesi",
+      date,
+      referenceId,
+    });
+    // Malik alacaklanır — depozito yükümlülüğü kapanır.
+    await postLedgerEntry(ctx, actor, {
+      propertyId: contract.propertyId,
+      contractId: contract._id,
+      personType: "owner",
+      personId: contract.ownerId,
+      kind: "depositReturn",
+      amount: totalCollected,
+      description: "Depozito iadesi",
+      date,
+      referenceId,
+    });
+    entriesPosted += 2;
+
+    // Depozitoyu tahsil eden vekil varsa borcu kapatılır (tahsil ettiği tutar kadar).
+    const byVekil = new Map<string, number>();
+    for (const c of depositCollections) {
+      if (!c.collectedByProxyOwnerId) continue;
+      const key = c.collectedByProxyOwnerId.toString();
+      byVekil.set(key, (byVekil.get(key) ?? 0) + c.amount);
+    }
+    for (const [ownerId, amount] of byVekil) {
+      await postLedgerEntry(ctx, actor, {
+        propertyId: contract.propertyId,
+        contractId: contract._id,
+        personType: "proxy",
+        personId: ownerId as Id<"owners">,
+        ownerId: ownerId as Id<"owners">,
+        kind: "depositReturn",
+        amount,
+        description: "Depozito iadesi (vekil)",
+        date,
+        referenceId,
+      });
+      entriesPosted += 1;
+    }
+
+    return { entriesPosted };
   },
 });
 

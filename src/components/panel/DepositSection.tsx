@@ -183,12 +183,16 @@ export function DepositSection() {
       return;
     }
     try {
-      await returnDeposit({
+      const result = await returnDeposit({
         contractId: contract._id,
         date: returnedAt,
         note: note.trim() || undefined,
       });
-      toast.success("Depozito iade edildi olarak işaretlendi.");
+      toast.success(
+        result.entriesPosted > 0
+          ? "Depozito iadesi işlendi; kiracı ve malik cari hesaplarına kaydedildi."
+          : "Depozito iade edildi olarak işaretlendi.",
+      );
       setReturning(null);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "İşlem başarısız.");
