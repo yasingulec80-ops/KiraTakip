@@ -1,5 +1,5 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
-import { ConvexError } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { mutation } from "./_generated/server";
 import { ROLES } from "./schema";
 
@@ -17,12 +17,15 @@ import { ROLES } from "./schema";
  * Yalnızca yönetici çalıştırabilir ve yalnızca gerçekten değişiklik gereken
  * kayıtları günceller. Kimlik doğrulama gerektirir (oturum açık olmalıdır).
  *
- * Çağrı: bunx convex run backfill:stripStaleCompanyFields
- * Güvenli: zaten doğru olan kayıtlara dokunmaz; geri dönüşü yoktur ama yalnızca
- * bayat alanları kaldırır.
+ * Çağrılar:
+ *   bunx convex run backfill:stripStaleCompanyFields '{"dryRun":true}'  → sadece sayar, yazmaz
+ *   bunx convex run backfill:stripStaleCompanyFields                    → gerçek temizlik
+ * Güvenli: zaten doğru olan kayıtlara dokunmaz; `dryRun: true` hiçbir şey yazmaz.
  */
 export const stripStaleCompanyFields = mutation({
-  handler: async (ctx) => {
+  args: { dryRun: v.optional(v.boolean()) },
+  handler: async (ctx, args) => {
+    const dryRun = args.dryRun === true;
     const userId = await getAuthUserId(ctx);
     const actor = userId ? await ctx.db.get(userId) : null;
     if (!actor || actor.role !== ROLES.ADMIN) {
@@ -40,18 +43,20 @@ export const stripStaleCompanyFields = mutation({
     const owners = await ctx.db.query("owners").collect();
     for (const owner of owners) {
       if (owner.isCompany === true && owner.tcNo) {
-        await ctx.db.patch(owner._id, { tcNo: null as any });
+        if (!dryRun) await ctx.db.patch(owner._id, { tcNo: null as any });
         ownersClearedTc++;
       } else if (
         owner.isCompany !== true &&
         (owner.taxOffice || owner.taxNumber || owner.signatoryName || owner.signatoryTcNo)
       ) {
-        await ctx.db.patch(owner._id, {
-          taxOffice: null as any,
-          taxNumber: null as any,
-          signatoryName: null as any,
-          signatoryTcNo: null as any,
-        });
+        if (!dryRun) {
+          await ctx.db.patch(owner._id, {
+            taxOffice: null as any,
+            taxNumber: null as any,
+            signatoryName: null as any,
+            signatoryTcNo: null as any,
+          });
+        }
         ownersClearedTax++;
       }
     }
@@ -60,23 +65,26 @@ export const stripStaleCompanyFields = mutation({
     const tenants = await ctx.db.query("tenants").collect();
     for (const tenant of tenants) {
       if (tenant.isCompany === true && tenant.tcNo) {
-        await ctx.db.patch(tenant._id, { tcNo: null as any });
+        if (!dryRun) await ctx.db.patch(tenant._id, { tcNo: null as any });
         tenantsClearedTc++;
       } else if (
         tenant.isCompany !== true &&
         (tenant.taxOffice || tenant.taxNumber || tenant.signatoryName || tenant.signatoryTcNo)
       ) {
-        await ctx.db.patch(tenant._id, {
-          taxOffice: null as any,
-          taxNumber: null as any,
-          signatoryName: null as any,
-          signatoryTcNo: null as any,
-        });
+        if (!dryRun) {
+          await ctx.db.patch(tenant._id, {
+            taxOffice: null as any,
+            taxNumber: null as any,
+            signatoryName: null as any,
+            signatoryTcNo: null as any,
+          });
+        }
         tenantsClearedTax++;
       }
     }
 
     return {
+      dryRun,
       ownersClearedTc,
       ownersClearedTax,
       tenantsClearedTc,
