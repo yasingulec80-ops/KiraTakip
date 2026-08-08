@@ -192,6 +192,68 @@ export const createManual = mutation({
   },
 });
 
+/**
+ * Vekil devri — vekilin tahsil ettiği tutarın malike teslim edilmesi.
+ * Vekilin cari hesabındaki borç (tahsil edilen kira/depozito) bu tutar
+ * kadar kapatılır (+). Teslim edilebilir tutar, vekilin tahsil ettiği ve
+ * henüz devretmediği toplam ile sınırlıdır.
+ */
+export const devir = mutation({
+  args: {
+    ownerId: v.id("owners"), // vekilin bağlı olduğu malik
+    amount: v.number(),
+    date: v.number(),
+    note: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const actor = await requireActor(ctx);
+    const owner = await ctx.db.get(args.ownerId);
+    if (!owner) throw new ConvexError("Malik bulunamadı.");
+    if (!owner.proxy) {
+      throw new ConvexError("Bu malikin kayıtlı bir vekili yok.");
+    }
+    if (args.amount <= 0) {
+      throw new ConvexError("Devir tutarı pozitif olmalıdır.");
+    }
+
+    // Vekilin tahsil ettiği ve henüz teslim etmediği tutar.
+    const entries = await ctx.db
+      .query("ledgerEntries")
+      .withIndex("by_person", (q) =>
+        q.eq("personType", "proxy").eq("personId", args.ownerId),
+      )
+      .collect();
+    const outstanding = entries.reduce((sum, e) => {
+      if (
+        e.kind === "collection" &&
+        e.description.startsWith("Vekil tahsilatı")
+      ) {
+        return sum + Math.abs(e.amount);
+      }
+      if (e.kind === "transfer") return sum - e.amount;
+      return sum;
+    }, 0);
+    if (args.amount > outstanding) {
+      throw new ConvexError(
+        `Teslim edilebilir tutar ${outstanding.toLocaleString("tr-TR")} ₺ ile sınırlıdır.`,
+      );
+    }
+
+    await postLedgerEntry(ctx, actor, {
+      personType: "proxy",
+      personId: args.ownerId,
+      ownerId: args.ownerId,
+      kind: "transfer",
+      amount: args.amount,
+      description: args.note
+        ? `Vekil devri — tahsilat teslimi · ${args.note}`
+        : "Vekil devri — tahsilat teslimi",
+      date: args.date,
+    });
+    return true;
+  },
+});
+
 /** Remove a ledger entry (admin only). Manual adjustments only. */
 export const removeEntry = mutation({
   args: { id: v.id("ledgerEntries") },

@@ -40,7 +40,7 @@ import {
   printReport,
 } from "@/lib/export";
 import { useMutation, useQuery } from "convex/react";
-import { BookOpenText, Plus, Trash2 } from "lucide-react";
+import { BookOpenText, HandCoins, Plus, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { DialogShell, Field, Row } from "./fields";
@@ -75,6 +75,7 @@ const KIND_LABEL: Record<string, string> = {
   expense: "Masraf",
   adjustment: "Düzeltme",
   depositReturn: "Depozito İadesi",
+  transfer: "Devir",
 };
 
 const TODAY = dateToInput(Date.now());
@@ -90,6 +91,7 @@ export function LedgerSection() {
   const properties = useQuery(api.properties.list);
   const contracts = useQuery(api.contracts.list);
   const removeEntry = useMutation(api.ledgers.removeEntry);
+  const devir = useMutation(api.ledgers.devir);
 
   const [search, setSearch] = useState("");
   const [from, setFrom] = useState("");
@@ -98,6 +100,7 @@ export function LedgerSection() {
   const [entryPerson, setEntryPerson] = useState<PersonAccount | null>(null);
   const [viewing, setViewing] = useState<PersonAccount | null>(null);
   const [deleting, setDeleting] = useState<LedgerEntry | null>(null);
+  const [deviring, setDeviring] = useState<PersonAccount | null>(null);
 
   const isAdmin = user?.role === "admin";
 
@@ -179,6 +182,24 @@ export function LedgerSection() {
       )
       .sort((a, b) => b.date - a.date);
 
+  /** Vekilin tahsil edip henüz malike teslim etmediği toplam tutar. */
+  const outstandingOf = (account: PersonAccount): number =>
+    (entries ?? [])
+      .filter(
+        (e) =>
+          e.personType === "proxy" && e.personId.toString() === account.personId,
+      )
+      .reduce((sum, e) => {
+        if (
+          e.kind === "collection" &&
+          e.description.startsWith("Vekil tahsilatı")
+        ) {
+          return sum + Math.abs(e.amount);
+        }
+        if (e.kind === "transfer") return sum - e.amount;
+        return sum;
+      }, 0);
+
   const entryRows = (account: PersonAccount): (string | number | null)[][] =>
     entriesOf(account).map((e) => [
       formatDate(e.date),
@@ -235,6 +256,27 @@ export function LedgerSection() {
       entryRows(account),
     );
     toast.success("PDF dökümü hazırlanıyor.");
+  };
+
+  const handleDevir = async (amount: number, date: string, note: string) => {
+    if (!deviring) return;
+    const parsedDate = parseDateInput(date);
+    if (!parsedDate) {
+      toast.error("Devir tarihi zorunludur.");
+      return;
+    }
+    try {
+      await devir({
+        ownerId: deviring.personId as Id<"owners">,
+        amount,
+        date: parsedDate,
+        note: note.trim() || undefined,
+      });
+      toast.success("Devir işlendi; vekilin cari hesabındaki borç kapatıldı.");
+      setDeviring(null);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "İşlem başarısız.");
+    }
   };
 
   const handleDelete = async () => {
@@ -365,20 +407,38 @@ export function LedgerSection() {
                       )}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 rounded-none"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setEntryPerson(a);
-                          setFormOpen(true);
-                        }}
-                        aria-label="Hesaba kayıt ekle"
-                      >
-                        <Plus className="h-4 w-4" />
-                      </Button>
+                      <div className="flex items-center justify-end gap-1">
+                        {a.personType === "proxy" && outstandingOf(a) > 0 && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 rounded-none text-brand hover:text-brand"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeviring(a);
+                            }}
+                            aria-label="Tahsilat teslim et (devir)"
+                            title={`Teslim edilebilir: ${formatCurrency(outstandingOf(a))}`}
+                          >
+                            <HandCoins className="h-4 w-4" />
+                          </Button>
+                        )}
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 rounded-none"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEntryPerson(a);
+                            setFormOpen(true);
+                          }}
+                          aria-label="Hesaba kayıt ekle"
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -398,15 +458,27 @@ export function LedgerSection() {
       <PersonDetailDialog
         account={viewing}
         entries={viewing ? entriesOf(viewing) : []}
+        devirable={viewing ? outstandingOf(viewing) : 0}
         onClose={() => setViewing(null)}
         onAddEntry={(account) => {
           setViewing(null);
           setEntryPerson(account);
           setFormOpen(true);
         }}
+        onDevir={(account) => {
+          setViewing(null);
+          setDeviring(account);
+        }}
         onExportCsv={viewing ? () => exportPersonCsv(viewing) : undefined}
         onExportPdf={viewing ? () => exportPersonPdf(viewing) : undefined}
         onDelete={isAdmin ? setDeleting : undefined}
+      />
+
+      <DevirDialog
+        account={deviring}
+        devirable={deviring ? outstandingOf(deviring) : 0}
+        onOpenChange={(open) => !open && setDeviring(null)}
+        onDevir={handleDevir}
       />
 
       <ManualEntryDialog
@@ -450,16 +522,20 @@ export function LedgerSection() {
 function PersonDetailDialog({
   account,
   entries,
+  devirable,
   onClose,
   onAddEntry,
+  onDevir,
   onExportCsv,
   onExportPdf,
   onDelete,
 }: {
   account: PersonAccount | null;
   entries: LedgerEntry[];
+  devirable: number;
   onClose: () => void;
   onAddEntry: (account: PersonAccount) => void;
+  onDevir: (account: PersonAccount) => void;
   onExportCsv?: () => void;
   onExportPdf?: () => void;
   onDelete?: (entry: LedgerEntry) => void;
@@ -490,6 +566,17 @@ function PersonDetailDialog({
             </Button>
           )}
           <div className="flex-1" />
+          {account && devirable > 0 && (
+            <Button
+              type="button"
+              variant="outline"
+              className="rounded-none text-brand"
+              onClick={() => onDevir(account)}
+            >
+              <HandCoins className="mr-2 h-4 w-4" />
+              Tahsilat Teslim Et
+            </Button>
+          )}
           {account && (
             <Button type="button" variant="outline" className="rounded-none" onClick={() => onAddEntry(account)}>
               Yeni Kayıt
@@ -580,6 +667,129 @@ function PersonDetailDialog({
           )}
         </div>
       )}
+    </DialogShell>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+
+function DevirDialog({
+  account,
+  devirable,
+  onOpenChange,
+  onDevir,
+}: {
+  account: PersonAccount | null;
+  devirable: number;
+  onOpenChange: (open: boolean) => void;
+  onDevir: (amount: number, date: string, note: string) => void;
+}) {
+  const [form, setForm] = useState({ amount: "", date: TODAY, note: "" });
+  const [error, setError] = useState<string | null>(null);
+
+  const [lastKey, setLastKey] = useState("");
+  const key = account ? account.key : "closed";
+  if (key !== lastKey) {
+    setLastKey(key);
+    setForm({ amount: "", date: TODAY, note: "" });
+    setError(null);
+  }
+
+  const submit = () => {
+    if (!account) return;
+    const amount = parseNumber(form.amount);
+    if (amount === undefined || amount <= 0) {
+      setError("Tutar geçerli bir değer olmalıdır.");
+      return;
+    }
+    if (amount > devirable) {
+      setError(
+        `Teslim edilebilir tutar ${formatCurrency(devirable)} ile sınırlıdır.`,
+      );
+      return;
+    }
+    if (form.date === "") {
+      setError("Devir tarihi zorunludur.");
+      return;
+    }
+    onDevir(amount, form.date, form.note);
+  };
+
+  return (
+    <DialogShell
+      open={account !== null}
+      onOpenChange={onOpenChange}
+      title="Vekil Devri — Tahsilat Teslimi"
+      description={
+        account
+          ? `${account.name} · ${account.subtitle} — teslim edilebilir ${formatCurrency(devirable)}`
+          : undefined
+      }
+      footer={
+        <>
+          <Button
+            type="button"
+            variant="outline"
+            className="rounded-none"
+            onClick={() => onOpenChange(false)}
+          >
+            Vazgeç
+          </Button>
+          <Button type="button" className="rounded-none" onClick={submit}>
+            <HandCoins className="mr-2 h-4 w-4" />
+            Devri İşle
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-5">
+        {error && (
+          <p className="text-sm text-destructive" role="alert">
+            {error}
+          </p>
+        )}
+        <p className="text-sm leading-6 text-muted-foreground">
+          Vekilin tahsil ettiği tutarın malike teslim edildiği kaydedilir;
+          vekilin cari hesabındaki borç bu tutar kadar kapatılır. Teslim
+          edilebilir tutar, vekilin tahsil edip henüz devretmediği toplamdır.
+        </p>
+        <Field label="Tutar" required hint={`teslim edilebilir ${formatCurrency(devirable)}`}>
+          <div className="flex gap-2">
+            <Input
+              value={form.amount}
+              onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
+              placeholder="15000"
+              className="rounded-none"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              className="shrink-0 rounded-none"
+              onClick={() =>
+                setForm((f) => ({ ...f, amount: String(devirable) }))
+              }
+            >
+              Tümü
+            </Button>
+          </div>
+        </Field>
+        <Field label="Devir Tarihi" required>
+          <Input
+            type="date"
+            value={form.date}
+            onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
+            className="rounded-none"
+          />
+        </Field>
+        <Field label="Not" hint="isteğe bağlı">
+          <Input
+            value={form.note}
+            onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
+            placeholder="örn. Ağustos tahsilatı teslim edildi"
+            className="rounded-none"
+          />
+        </Field>
+      </div>
     </DialogShell>
   );
 }
