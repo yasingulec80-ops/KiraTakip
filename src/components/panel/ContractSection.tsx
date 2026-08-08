@@ -138,6 +138,28 @@ const contractEnd = (start: number, months: number): number => {
   return new Date(d.getFullYear(), d.getMonth() + months, 0).getTime();
 };
 
+/** Kira kontratına otomatik eklenen genel koşullar (madde metinleri). */
+const GENERAL_CONDITIONS: string[] = [
+  "Kiracı, kiralananı özenle kullanmak zorundadır.",
+  "Kiracı, kiralananda ve çevrede oturanlara iyi niyet kuralları içinde davranmaya zorunludur.",
+  "Kiracı, kiralananı kısmen veya tamamen üçüncü kişilere kiralayamaz, alt kiraya veremez; devir ve temlik edemez.",
+  "Kiracı, kiralayanın yazılı izni olmadıkça, kiralananda değişiklik yapamaz; aksi halde, doğacak zararı karşılamak zorundadır.",
+  "Üçüncü kişilerin kiralanan üzerinde hak iddia etmeleri halinde, kiracı, durumu derhal kiralayana haber vermek zorundadır.",
+  "Kiracı, kiralananda yapılması gereken onarımları, derhal kiralayana bildirmek zorundadır; aksi halde doğacak zarardan sorumludur.",
+  "Kiracı, kat malikleri kurulunca kendisine tebliğ edilen hususları, kiralayana haber vermek zorundadır.",
+  "Kiracı, kat malikleri kurulu kararı uyarınca, yapılması gereken işlere izin vermek zorundadır.",
+  "Kiracı, kiralanandaki onarımlara katlanmak ve kiralanandaki olağan kullanımdan dolayı yapılması gereken onarımları yapmak/yaptırmak ve giderlerini karşılamak zorundadır.",
+  "Kiralananın mülkiyet hakkından doğan vergileri kiralayana, kullanımdan doğan vergi, resim ve harçları kiracıya aittir. Uyuşmazlık halinde, yerel örf ve âdetler uygulanır.",
+  "Kiracı, kira sözleşmesinin sonunda, kiralananı aldığı şekilde, kiralayana teslim etmek zorundadır: Keza kiralananla birlikte teslim edilen demirbaşlar da alındığı şekilde, kiralanana teslim edilmediği takdirde, oluşan hasarların bedelinin kiralayana ödenmesi veya eski hale getirilmesi zorunludur.",
+  "Kiralananın iyi ve kullanılmaya elverişli halde teslim edildiği asıldır. Aksi durum kiracı tarafından ispatlanmak zorundadır. Kiralananın normal kullanımından dolayı ortaya çıkacak yıpranma ve eksikliklerden dolayı kiracı sorumlu değildir.",
+  "Kiracı, kira sözleşmesinin sona ermesi veya satılığa çıkartılması halinde, kiralananın gezilmesine ve incelenmesine izin vermek zorundadır.",
+  "Kiralananın boşaltılması/tahliyesi gerektiği hallerde, kiralananın boşaltılmaması durumunda ortaya çıkacak zararlardan dolayı kiracı sorumlu olacaktır.",
+  "Kiracı, kendisi veya birlikte oturanların sağlığı için ciddi tehlike oluşturmayan kusurlardan dolayı, kiralayanı teslim almaktan kaçınamaz, sözleşmeyi bozamaz ve kiradan indirim talebinde bulunamaz.",
+  "Kiracı, kiralana yaptığı faydalı ve lüks şeylerin bedelini kiralayandan isteyemez ve sözleşme bitiminde bunları kiralayana teslim etmek zorundadır.",
+  "Kiracı, kiralayanın yazılı olurunu almak ve giderleri kendisine ait olmak üzere, genel anten, uydu anteni, kablo televizyon gibi donanımları yaptırabilir.",
+  "İş bu kira sözleşmesinde yer almayan hususlar hakkında 6098 sayılı borçlar kanunu hükümleri geçerlidir.",
+];
+
 export function ContractSection() {
   const { user } = useAuth();
   const contracts = useQuery(api.contracts.list);
@@ -1166,9 +1188,14 @@ function buildContractDocument(
   <h2>MADDE 6 — DEMİRBAŞLAR</h2>
   <p class="clause">${esc(fixtureList)}</p>
 
+  <h2>MADDE 7 — GENEL KOŞULLAR</h2>
+  ${GENERAL_CONDITIONS.map(
+    (c, i) => `<p class="clause">${i + 1}. ${esc(c)}</p>`,
+  ).join("\n  ")}
+
   ${
     contract.notes
-      ? `<h2>MADDE 7 — ÖZEL HÜKÜMLER</h2><p class="clause">${esc(contract.notes)}</p>`
+      ? `<h2>MADDE 8 — ÖZEL HÜKÜMLER</h2><p class="clause">${esc(contract.notes)}</p>`
       : ""
   }
 
