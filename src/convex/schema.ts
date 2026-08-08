@@ -169,6 +169,7 @@ const schema = defineSchema(
       durationMonths: v.number(), // Kira süresi (ay)
       rentAmount: v.number(), // Aylık kira
       depositAmount: v.number(), // Depozito
+      depositMonths: v.optional(v.number()), // Depozito kaç aylık kira karşılığı
       depositStatus: v.optional(depositStatusValidator), // Depozito durumu
       depositReturnedAt: v.optional(v.number()), // İade tarihi (ms)
       depositNote: v.optional(v.string()), // İade notu

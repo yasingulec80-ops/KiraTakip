@@ -77,6 +77,7 @@ interface ContractFormState {
   durationMonths: string;
   rentAmount: string;
   depositAmount: string;
+  depositMonths: string;
   depositStatus: "paid" | "held" | "returned";
   status: "active" | "ended";
   fixtures: FixtureDraft[];
@@ -91,6 +92,7 @@ const emptyForm: ContractFormState = {
   durationMonths: "12",
   rentAmount: "",
   depositAmount: "",
+  depositMonths: "0",
   depositStatus: "paid",
   status: "active",
   fixtures: [],
@@ -105,6 +107,7 @@ const formFromContract = (c: Contract): ContractFormState => ({
   durationMonths: String(c.durationMonths),
   rentAmount: String(c.rentAmount),
   depositAmount: String(c.depositAmount),
+  depositMonths: c.depositMonths ? String(c.depositMonths) : "0",
   depositStatus: c.depositStatus ?? "paid",
   status: c.status ?? "active",
   fixtures: (c.fixtures ?? []).map((f) => ({
@@ -274,6 +277,10 @@ export function ContractSection() {
       durationMonths: parseNumber(form.durationMonths) ?? 12,
       rentAmount: parseNumber(form.rentAmount) ?? 0,
       depositAmount: parseNumber(form.depositAmount) ?? 0,
+      depositMonths:
+        (parseNumber(form.depositMonths) ?? 0) > 0
+          ? parseNumber(form.depositMonths)
+          : undefined,
       depositStatus: form.depositStatus,
       status: form.status,
       fixtures: form.fixtures
@@ -571,6 +578,25 @@ function ContractFormDialog({
     }));
   };
 
+  // Depozito karşılığı seçilince tutar alanı boşsa aylık kira × ay otomatik doldurulur.
+  const pickDepositMonths = (value: string) => {
+    setForm((f) => {
+      const months = parseNumber(value) ?? 0;
+      const rent = parseNumber(f.rentAmount) ?? 0;
+      const autoFill = months > 0 && rent > 0 && f.depositAmount.trim() === "";
+      return {
+        ...f,
+        depositMonths: value,
+        depositAmount: autoFill ? String(rent * months) : f.depositAmount,
+      };
+    });
+  };
+
+  const depositMonthsNum = parseNumber(form.depositMonths) ?? 0;
+  const rentNum = parseNumber(form.rentAmount) ?? 0;
+  const impliedDeposit =
+    depositMonthsNum > 0 && rentNum > 0 ? rentNum * depositMonthsNum : null;
+
   const setFixture = (index: number, patch: Partial<FixtureDraft>) =>
     setForm((f) => ({
       ...f,
@@ -710,7 +736,7 @@ function ContractFormDialog({
           </Field>
         </Row>
 
-        <Row>
+        <Row cols={3}>
           <Field label="Depozito Tutarı" hint="₺">
             <Input
               value={form.depositAmount}
@@ -718,6 +744,29 @@ function ContractFormDialog({
               placeholder="30000"
               className="rounded-none"
             />
+          </Field>
+          <Field
+            label="Depozito Karşılığı"
+            hint={
+              impliedDeposit !== null
+                ? `≈ ${formatNumber(impliedDeposit)} ₺`
+                : undefined
+            }
+          >
+            <Select value={form.depositMonths} onValueChange={pickDepositMonths}>
+              <SelectTrigger className="rounded-none">
+                <SelectValue placeholder="Seçin" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="0">Belirtilmedi</SelectItem>
+                <SelectItem value="1">1 aylık kira</SelectItem>
+                <SelectItem value="2">2 aylık kira</SelectItem>
+                <SelectItem value="3">3 aylık kira</SelectItem>
+                <SelectItem value="4">4 aylık kira</SelectItem>
+                <SelectItem value="6">6 aylık kira</SelectItem>
+                <SelectItem value="12">12 aylık kira</SelectItem>
+              </SelectContent>
+            </Select>
           </Field>
           <Field label="Depozito Durumu">
             <Select
@@ -964,6 +1013,11 @@ function ContractDetailDialog({
             value={
               <span>
                 {formatCurrency(contract.depositAmount)}
+                {contract.depositMonths ? (
+                  <span className="ml-2 text-xs text-muted-foreground">
+                    {contract.depositMonths} aylık kira karşılığı
+                  </span>
+                ) : null}
                 <span className="ml-2 text-xs text-muted-foreground">
                   {DEPOSIT_STATUS_LABEL[contract.depositStatus ?? "paid"]}
                 </span>
@@ -1183,7 +1237,11 @@ function buildContractDocument(
   <p class="clause">Kiracı, kira bedelini her ayın başında ödemekle yükümlüdür. Aylık kira bedeli ${esc(tl(contract.rentAmount))} olarak belirlenmiştir.</p>
 
   <h2>MADDE 5 — DEPOZİTO</h2>
-  <p class="clause">Depozito tutarı ${esc(tl(contract.depositAmount))} olup durumu: ${esc(depositStatus)}. Depozito, kontrat sona erdiğinde ve gayrimenkulün boşaltılmış olduğu tespit edildiğinde iade edilir.</p>
+  <p class="clause">Depozito tutarı ${esc(tl(contract.depositAmount))} olup durumu: ${esc(depositStatus)}. ${
+    contract.depositMonths
+      ? `Depozito, ${esc(String(contract.depositMonths))} aylık kira bedeli karşılığıdır (aylık kira ${esc(tl(contract.rentAmount))} × ${esc(String(contract.depositMonths))} ay = ${esc(tl(contract.rentAmount * contract.depositMonths))}). `
+      : ""
+  }Depozito, kontrat sona erdiğinde ve gayrimenkulün boşaltılmış olduğu tespit edildiğinde iade edilir.</p>
 
   <h2>MADDE 6 — DEMİRBAŞLAR</h2>
   <p class="clause">${esc(fixtureList)}</p>
