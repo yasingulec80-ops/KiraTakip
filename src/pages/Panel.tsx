@@ -51,15 +51,15 @@ type TabId =
   | "report"
   | "users";
 
-const TABS: { id: TabId; num?: number; label: string }[] = [
-  { id: "properties", num: 1, label: "Gayrimenkuller" },
-  { id: "owners", num: 2, label: "Malikler" },
-  { id: "tenants", num: 3, label: "Kiracılar" },
-  { id: "contracts", num: 4, label: "Kontratlar" },
-  { id: "accruals", num: 5, label: "Tahakkuklar" },
-  { id: "collections", num: 6, label: "Tahsilatlar" },
-  { id: "expenses", num: 7, label: "Masraflar" },
-  { id: "ledgers", num: 8, label: "Cari Hesaplar" },
+const TABS: { id: TabId; label: string }[] = [
+  { id: "properties", label: "Gayrimenkuller" },
+  { id: "owners", label: "Malikler" },
+  { id: "tenants", label: "Kiracılar" },
+  { id: "contracts", label: "Kontratlar" },
+  { id: "accruals", label: "Tahakkuklar" },
+  { id: "collections", label: "Tahsilatlar" },
+  { id: "expenses", label: "Masraflar" },
+  { id: "ledgers", label: "Cari Hesaplar" },
   { id: "deposits", label: "Depozitolar" },
   { id: "report", label: "Vekil Devir Raporu" },
 ];
@@ -345,18 +345,6 @@ export default function Panel() {
                       : "border-transparent text-muted-foreground hover:border-foreground/30 hover:text-foreground",
                   )}
                 >
-                  {tab.num !== undefined && (
-                    <span
-                      className={cn(
-                        "font-display text-xs",
-                        active
-                          ? "text-brand"
-                          : "text-muted-foreground/60 group-hover:text-foreground/70",
-                      )}
-                    >
-                      {String(tab.num).padStart(2, "0")}
-                    </span>
-                  )}
                   {tab.label}
                 </button>
               );
