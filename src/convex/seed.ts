@@ -46,7 +46,7 @@ export const seedDemoData = mutation({
       (await ctx.db.query("users").first());
     if (!actor) {
       throw new ConvexError(
-        "Önce Admin / 8842 ile bir kez giriş yapın, sonra seed'i tekrar çalıştırın.",
+        "Henüz hiçbir kullanıcı yok. Önce panelden bir kullanıcı hesabıyla giriş yapın, sonra seed'i tekrar çalıştırın.",
       );
     }
 

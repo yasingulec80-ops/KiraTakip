@@ -214,7 +214,7 @@ export default function Landing() {
             </div>
             <div className="grid flex-1 gap-px border border-border bg-border sm:grid-cols-3">
               {[
-                ["01", "Giriş yapın", "Yönetici hesabı (Admin) ile panele girin, ilk kullanıcıları ekleyin."],
+                ["01", "Giriş yapın", "Yönetici hesabınızla panele girin, ilk kullanıcıları ekleyin."],
                 ["02", "Kişileri ve gayrimenkulleri kaydedin", "Malikleri, vekilleri, kiracıları, kefilleri ve portföydeki gayrimenkulleri tanımlayın."],
                 ["03", "Kontratı oluşturun", "Sözleşmeyi kurun; tahakkuklar otomatik işlenir, tahsilat ve masraflar cari hesaplara yansır."],
               ].map(([num, title, desc]) => (
