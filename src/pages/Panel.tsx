@@ -1,5 +1,16 @@
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
+import type { Doc } from "@/convex/_generated/dataModel";
+import { DialogShell } from "@/components/panel/fields";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { useAuth } from "@/hooks/use-auth";
 import { KpiGrid, type KpiTile } from "@/components/panel/KpiGrid";
 import { OwnerSection } from "@/components/panel/OwnerSection";
@@ -14,15 +25,16 @@ import { LedgerSection } from "@/components/panel/LedgerSection";
 import { UsersSection } from "@/components/panel/UsersSection";
 import { useQuery } from "convex/react";
 import { cn } from "@/lib/utils";
-import { formatCurrency } from "@/lib/export";
+import { formatCurrency, formatDate, formatNumber } from "@/lib/export";
 import {
+  ArrowUpRight,
   Building2,
   LogOut,
   Lock,
   ShieldCheck,
   Users,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 
 type TabId =
@@ -154,7 +166,13 @@ export default function Panel() {
     ];
   }, [properties, owners, tenants, contracts, accruals, collections]);
 
+  const [detailTile, setDetailTile] = useState<string | null>(null);
+
   const handleTileOpen = (id: string) => {
+    setDetailTile(id);
+  };
+
+  const handleGoToTabFromDetail = (id: string) => {
     const tabFor: Record<string, TabId> = {
       properties: "properties",
       contracts: "contracts",
@@ -165,6 +183,7 @@ export default function Panel() {
       tenants: "tenants",
     };
     const tab = tabFor[id];
+    setDetailTile(null);
     if (tab) setActiveTab(tab);
   };
 
@@ -269,6 +288,19 @@ export default function Panel() {
 
           <KpiGrid tiles={tiles} onOpen={handleTileOpen} />
 
+          <OverviewDetailDialog
+            open={detailTile !== null}
+            onOpenChange={(open) => !open && setDetailTile(null)}
+            tileId={detailTile}
+            onGoToTab={handleGoToTabFromDetail}
+            properties={properties ?? []}
+            owners={owners ?? []}
+            tenants={tenants ?? []}
+            contracts={contracts ?? []}
+            accruals={accruals ?? []}
+            collections={collections ?? []}
+          />
+
           {/* Section header rule */}
           <div className="flex items-center gap-4 pt-2">
             <span className="eyebrow text-muted-foreground">
@@ -341,5 +373,473 @@ export default function Panel() {
         </footer>
       </main>
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+
+const DETAIL_TITLES: Record<string, { title: string; hint: string }> = {
+  properties: {
+    title: "Gayrimenkuller",
+    hint: "Portföydeki tüm gayrimenkuller",
+  },
+  contracts: {
+    title: "Aktif Sözleşmeler",
+    hint: "Yürürlükteki kira sözleşmeleri",
+  },
+  deposits: {
+    title: "Depozitolar",
+    hint: "Sözleşme bazında tutulan depozitolar",
+  },
+  pendingRents: {
+    title: "Bekleyen Kiralar",
+    hint: "Ödenmemiş tahakkuklar",
+  },
+  collectedRents: {
+    title: "Tahsil Edilen Kiralar",
+    hint: "Kaydedilen tüm tahsilatlar",
+  },
+  owners: {
+    title: "Malikler",
+    hint: "Kayıtlı mal sahipleri",
+  },
+  tenants: {
+    title: "Kiracılar",
+    hint: "Kayıtlı kiracılar",
+  },
+};
+
+function OverviewDetailDialog({
+  open,
+  onOpenChange,
+  tileId,
+  onGoToTab,
+  properties,
+  owners,
+  tenants,
+  contracts,
+  accruals,
+  collections,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  tileId: string | null;
+  onGoToTab: (id: string) => void;
+  properties: Doc<"properties">[];
+  owners: Doc<"owners">[];
+  tenants: Doc<"tenants">[];
+  contracts: Doc<"contracts">[];
+  accruals: Doc<"accruals">[];
+  collections: Doc<"collections">[];
+}) {
+  const ownerMap = useMemo(() => {
+    const map = new Map<string, Doc<"owners">>();
+    owners.forEach((o) => map.set(o._id.toString(), o));
+    return map;
+  }, [owners]);
+  const tenantMap = useMemo(() => {
+    const map = new Map<string, Doc<"tenants">>();
+    tenants.forEach((t) => map.set(t._id.toString(), t));
+    return map;
+  }, [tenants]);
+  const propertyMap = useMemo(() => {
+    const map = new Map<string, Doc<"properties">>();
+    properties.forEach((p) => map.set(p._id.toString(), p));
+    return map;
+  }, [properties]);
+
+  const meta = tileId ? DETAIL_TITLES[tileId] : undefined;
+
+  return (
+    <DialogShell
+      open={open}
+      onOpenChange={onOpenChange}
+      title={meta?.title ?? "Detay"}
+      description={meta?.hint}
+      wide
+      footer={
+        <>
+          <Button
+            type="button"
+            variant="outline"
+            className="rounded-none"
+            onClick={() => onOpenChange(false)}
+          >
+            Kapat
+          </Button>
+          {tileId && (
+            <Button
+              type="button"
+              className="rounded-none"
+              onClick={() => onGoToTab(tileId)}
+            >
+              Modüle Git
+              <ArrowUpRight className="ml-2 h-4 w-4" />
+            </Button>
+          )}
+        </>
+      }
+    >
+      <div className="max-h-[60vh] overflow-y-auto">
+        {tileId === "properties" && (
+          <PropertyDetailList
+            properties={properties}
+            ownerMap={ownerMap}
+          />
+        )}
+        {tileId === "contracts" && (
+          <ContractDetailList
+            contracts={contracts.filter((c) => c.status !== "ended")}
+            propertyMap={propertyMap}
+            tenantMap={tenantMap}
+            ownerMap={ownerMap}
+          />
+        )}
+        {tileId === "deposits" && (
+          <DepositDetailList contracts={contracts} propertyMap={propertyMap} />
+        )}
+        {tileId === "pendingRents" && (
+          <PendingRentDetailList
+            accruals={accruals}
+            collections={collections}
+            contracts={contracts}
+            propertyMap={propertyMap}
+            tenantMap={tenantMap}
+          />
+        )}
+        {tileId === "collectedRents" && (
+          <CollectionDetailList
+            collections={collections}
+            contracts={contracts}
+            propertyMap={propertyMap}
+            tenantMap={tenantMap}
+          />
+        )}
+        {tileId === "owners" && <OwnerDetailList owners={owners} />}
+        {tileId === "tenants" && <TenantDetailList tenants={tenants} />}
+      </div>
+    </DialogShell>
+  );
+}
+
+/* ------------------------------ alt listeler ----------------------------- */
+
+function DetailTable({
+  headers,
+  children,
+}: {
+  headers: string[];
+  children: ReactNode;
+}) {
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow className="hover:bg-transparent">
+          {headers.map((h) => (
+            <TableHead key={h}>{h}</TableHead>
+          ))}
+        </TableRow>
+      </TableHeader>
+      <TableBody>{children}</TableBody>
+    </Table>
+  );
+}
+
+function PropertyDetailList({
+  properties,
+  ownerMap,
+}: {
+  properties: Doc<"properties">[];
+  ownerMap: Map<string, Doc<"owners">>;
+}) {
+  return (
+    <DetailTable headers={["Gayrimenkul", "Adres", "M²", "Oda", "Malik"]}>
+      {properties.map((p) => (
+        <TableRow key={p._id}>
+          <TableCell className="font-medium">{p.name}</TableCell>
+          <TableCell className="text-sm text-muted-foreground">{p.address}</TableCell>
+          <TableCell className="text-sm tabular-nums">
+            {p.m2 !== undefined ? formatNumber(p.m2) : "—"}
+          </TableCell>
+          <TableCell className="text-sm">{p.roomCount ?? "—"}</TableCell>
+          <TableCell className="text-sm">
+            {p.ownerId ? ownerMap.get(p.ownerId.toString())?.name ?? "—" : "—"}
+          </TableCell>
+        </TableRow>
+      ))}
+    </DetailTable>
+  );
+}
+
+function ContractDetailList({
+  contracts,
+  propertyMap,
+  tenantMap,
+  ownerMap,
+}: {
+  contracts: Doc<"contracts">[];
+  propertyMap: Map<string, Doc<"properties">>;
+  tenantMap: Map<string, Doc<"tenants">>;
+  ownerMap: Map<string, Doc<"owners">>;
+}) {
+  return (
+    <DetailTable
+      headers={["Gayrimenkul", "Malik", "Kiracı", "Kira", "Depozito", "Bitiş"]}
+    >
+      {contracts.map((c) => (
+        <TableRow key={c._id}>
+          <TableCell className="font-medium">
+            {propertyMap.get(c.propertyId.toString())?.name ?? "—"}
+          </TableCell>
+          <TableCell className="text-sm">
+            {ownerMap.get(c.ownerId.toString())?.name ?? "—"}
+          </TableCell>
+          <TableCell className="text-sm">
+            {tenantMap.get(c.tenantId.toString())?.name ?? "—"}
+          </TableCell>
+          <TableCell className="text-sm tabular-nums">
+            {formatCurrency(c.rentAmount)}/ay
+          </TableCell>
+          <TableCell className="text-sm tabular-nums">
+            {formatCurrency(c.depositAmount)}
+          </TableCell>
+          <TableCell className="text-sm text-muted-foreground">
+            {formatDate(
+              new Date(
+                new Date(c.startDate).getFullYear(),
+                new Date(c.startDate).getMonth() + c.durationMonths,
+                1,
+              ).getTime(),
+            )}
+          </TableCell>
+        </TableRow>
+      ))}
+    </DetailTable>
+  );
+}
+
+const DEPOSIT_STATUS_LABEL: Record<string, string> = {
+  paid: "Ödendi",
+  held: "Elde Tutuluyor",
+  returned: "İade Edildi",
+};
+
+function DepositDetailList({
+  contracts,
+  propertyMap,
+}: {
+  contracts: Doc<"contracts">[];
+  propertyMap: Map<string, Doc<"properties">>;
+}) {
+  const total = contracts.reduce((s, c) => s + c.depositAmount, 0);
+  return (
+    <div>
+      <DetailTable headers={["Gayrimenkul", "Depozito", "Durum"]}>
+        {contracts.map((c) => {
+          const status = c.depositStatus ?? "paid";
+          return (
+            <TableRow key={c._id}>
+              <TableCell className="font-medium">
+                {propertyMap.get(c.propertyId.toString())?.name ?? "—"}
+              </TableCell>
+              <TableCell className="text-sm tabular-nums">
+                {formatCurrency(c.depositAmount)}
+              </TableCell>
+              <TableCell>
+                <Badge
+                  variant={
+                    status === "returned"
+                      ? "outline"
+                      : status === "held"
+                        ? "secondary"
+                        : "default"
+                  }
+                  className="rounded-none"
+                >
+                  {DEPOSIT_STATUS_LABEL[status]}
+                </Badge>
+              </TableCell>
+            </TableRow>
+          );
+        })}
+      </DetailTable>
+      <p className="mt-3 text-sm text-muted-foreground">
+        Toplam depozito:{" "}
+        <span className="font-medium text-foreground">
+          {formatCurrency(total)}
+        </span>
+      </p>
+    </div>
+  );
+}
+
+function PendingRentDetailList({
+  accruals,
+  collections,
+  contracts,
+  propertyMap,
+  tenantMap,
+}: {
+  accruals: Doc<"accruals">[];
+  collections: Doc<"collections">[];
+  contracts: Doc<"contracts">[];
+  propertyMap: Map<string, Doc<"properties">>;
+  tenantMap: Map<string, Doc<"tenants">>;
+}) {
+  const contractMap = useMemo(() => {
+    const map = new Map<string, Doc<"contracts">>();
+    contracts.forEach((c) => map.set(c._id.toString(), c));
+    return map;
+  }, [contracts]);
+  const paidByAccrual = useMemo(() => {
+    const map = new Map<string, number>();
+    collections.forEach((c) => {
+      if (!c.accrualId) return;
+      map.set(
+        c.accrualId.toString(),
+        (map.get(c.accrualId.toString()) ?? 0) + c.amount,
+      );
+    });
+    return map;
+  }, [collections]);
+
+  const rows = accruals
+    .map((a) => {
+      const paid = paidByAccrual.get(a._id.toString()) ?? 0;
+      return {
+        accrual: a,
+        remaining: Math.max(0, a.amount - paid),
+      };
+    })
+    .filter((r) => r.remaining > 0)
+    .sort((x, y) => x.accrual.dueDate - y.accrual.dueDate);
+
+  const totalRemaining = rows.reduce((s, r) => s + r.remaining, 0);
+
+  return (
+    <div>
+      <DetailTable headers={["Dönem", "Gayrimenkul", "Kiracı", "Vade", "Kalan"]}>
+        {rows.map(({ accrual: a, remaining }) => {
+          const contract = contractMap.get(a.contractId.toString());
+          return (
+            <TableRow key={a._id}>
+              <TableCell className="font-medium tabular-nums">{a.period}</TableCell>
+              <TableCell className="text-sm">
+                {contract
+                  ? propertyMap.get(contract.propertyId.toString())?.name ?? "—"
+                  : "—"}
+              </TableCell>
+              <TableCell className="text-sm">
+                {contract
+                  ? tenantMap.get(contract.tenantId.toString())?.name ?? "—"
+                  : "—"}
+              </TableCell>
+              <TableCell className="text-sm text-muted-foreground">
+                {formatDate(a.dueDate)}
+              </TableCell>
+              <TableCell className="text-sm tabular-nums text-amber-700">
+                {formatCurrency(remaining)}
+              </TableCell>
+            </TableRow>
+          );
+        })}
+      </DetailTable>
+      <p className="mt-3 text-sm text-muted-foreground">
+        Toplam bekleyen kira:{" "}
+        <span className="font-medium text-amber-700">
+          {formatCurrency(totalRemaining)}
+        </span>
+      </p>
+    </div>
+  );
+}
+
+function CollectionDetailList({
+  collections,
+  contracts,
+  propertyMap,
+  tenantMap,
+}: {
+  collections: Doc<"collections">[];
+  contracts: Doc<"contracts">[];
+  propertyMap: Map<string, Doc<"properties">>;
+  tenantMap: Map<string, Doc<"tenants">>;
+}) {
+  const contractMap = useMemo(() => {
+    const map = new Map<string, Doc<"contracts">>();
+    contracts.forEach((c) => map.set(c._id.toString(), c));
+    return map;
+  }, [contracts]);
+  const sorted = [...collections].sort((a, b) => b.date - a.date);
+  const total = collections.reduce((s, c) => s + c.amount, 0);
+
+  return (
+    <div>
+      <DetailTable headers={["Tarih", "Gayrimenkul", "Kiracı", "Tutar"]}>
+        {sorted.map((c) => {
+          const contract = contractMap.get(c.contractId.toString());
+          return (
+            <TableRow key={c._id}>
+              <TableCell className="text-sm text-muted-foreground">
+                {formatDate(c.date)}
+              </TableCell>
+              <TableCell className="text-sm">
+                {contract
+                  ? propertyMap.get(contract.propertyId.toString())?.name ?? "—"
+                  : "—"}
+              </TableCell>
+              <TableCell className="text-sm">
+                {contract
+                  ? tenantMap.get(contract.tenantId.toString())?.name ?? "—"
+                  : "—"}
+              </TableCell>
+              <TableCell className="text-sm tabular-nums text-emerald-700">
+                {formatCurrency(c.amount)}
+              </TableCell>
+            </TableRow>
+          );
+        })}
+      </DetailTable>
+      <p className="mt-3 text-sm text-muted-foreground">
+        Toplam tahsilat:{" "}
+        <span className="font-medium text-emerald-700">
+          {formatCurrency(total)}
+        </span>
+      </p>
+    </div>
+  );
+}
+
+function OwnerDetailList({ owners }: { owners: Doc<"owners">[] }) {
+  return (
+    <DetailTable headers={["Adı Soyadı", "TC Kimlik", "Telefon", "Vekil"]}>
+      {owners.map((o) => (
+        <TableRow key={o._id}>
+          <TableCell className="font-medium">{o.name}</TableCell>
+          <TableCell className="text-sm tabular-nums">{o.tcNo}</TableCell>
+          <TableCell className="text-sm">{o.phone}</TableCell>
+          <TableCell className="text-sm">
+            {o.proxy ? `${o.proxy.name} (${o.proxy.phone})` : "—"}
+          </TableCell>
+        </TableRow>
+      ))}
+    </DetailTable>
+  );
+}
+
+function TenantDetailList({ tenants }: { tenants: Doc<"tenants">[] }) {
+  return (
+    <DetailTable headers={["Adı Soyadı", "TC Kimlik", "Telefon", "Kefil"]}>
+      {tenants.map((t) => (
+        <TableRow key={t._id}>
+          <TableCell className="font-medium">{t.name}</TableCell>
+          <TableCell className="text-sm tabular-nums">{t.tcNo}</TableCell>
+          <TableCell className="text-sm">{t.phone}</TableCell>
+          <TableCell className="text-sm">
+            {t.guarantor ? `${t.guarantor.name} (${t.guarantor.phone})` : "—"}
+          </TableCell>
+        </TableRow>
+      ))}
+    </DetailTable>
   );
 }
