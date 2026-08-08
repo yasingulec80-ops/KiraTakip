@@ -194,6 +194,7 @@ const schema = defineSchema(
       durationMonths: v.number(), // Kira süresi (ay)
       rentAmount: v.number(), // Aylık kira
       rentVat: v.optional(rentVatValidator), // KDV dahil / hariç (malik şirketse)
+      vatRate: v.optional(v.number()), // KDV oranı (%) — ör. 20
       depositAmount: v.number(), // Depozito
       depositMonths: v.optional(v.number()), // Depozito kaç aylık kira karşılığı
       depositStatus: v.optional(depositStatusValidator), // Yalnızca iade takibi (Depozitolar modülü)

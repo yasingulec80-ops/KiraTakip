@@ -37,6 +37,7 @@ const DETAIL_HEADERS = [
   "Kontrat",
   "Tahsil Edilen Kira",
   "Tahsil Edilen Depozito",
+  "Vekil Borç",
   "Kira Devri",
   "Depozito Devri",
   "Vekil Alacak",
@@ -433,6 +434,7 @@ export function VekilDevirReport() {
     r.contractLabel,
     r.collectedRent,
     r.collectedDeposit,
+    r.collectedRent + r.collectedDeposit,
     r.rentTransfer,
     r.depositTransfer,
     r.vekilAlacak,
@@ -512,6 +514,7 @@ export function VekilDevirReport() {
                     <TableHead>Vekil</TableHead>
                     <TableHead className="text-right">Tahsil Edilen Kira</TableHead>
                     <TableHead className="text-right">Tahsil Edilen Depozito</TableHead>
+                    <TableHead className="text-right">Vekil Borç</TableHead>
                     <TableHead className="text-right">Kira Devri</TableHead>
                     <TableHead className="text-right">Depozito Devri</TableHead>
                     <TableHead className="text-right">Vekil Alacak</TableHead>
@@ -539,6 +542,13 @@ export function VekilDevirReport() {
                         <TableCell className="text-right tabular-nums">
                           {r.collectedDeposit > 0
                             ? formatCurrency(r.collectedDeposit)
+                            : "—"}
+                        </TableCell>
+                        <TableCell className="text-right font-medium tabular-nums">
+                          {r.collectedRent + r.collectedDeposit > 0
+                            ? formatCurrency(
+                                r.collectedRent + r.collectedDeposit,
+                              )
                             : "—"}
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
@@ -584,6 +594,13 @@ export function VekilDevirReport() {
                 · depozito{" "}
                 <span className="font-medium text-foreground">
                   {formatCurrency(summaryTotals.collectedDeposit)}
+                </span>{" "}
+                · vekil borç{" "}
+                <span className="font-medium text-foreground">
+                  {formatCurrency(
+                    summaryTotals.collectedRent +
+                      summaryTotals.collectedDeposit,
+                  )}
                 </span>
               </span>
               <span>
@@ -641,6 +658,7 @@ export function VekilDevirReport() {
                         <TableHead>Kontrat</TableHead>
                         <TableHead className="text-right">Tahsil Edilen Kira</TableHead>
                         <TableHead className="text-right">Tahsil Edilen Depozito</TableHead>
+                        <TableHead className="text-right">Vekil Borç</TableHead>
                         <TableHead className="text-right">Kira Devri</TableHead>
                         <TableHead className="text-right">Depozito Devri</TableHead>
                         <TableHead className="text-right">Vekil Alacak</TableHead>
@@ -672,6 +690,13 @@ export function VekilDevirReport() {
                             <TableCell className="text-right tabular-nums">
                               {r.collectedDeposit > 0
                                 ? formatCurrency(r.collectedDeposit)
+                                : "—"}
+                            </TableCell>
+                            <TableCell className="text-right font-medium tabular-nums">
+                              {r.collectedRent + r.collectedDeposit > 0
+                                ? formatCurrency(
+                                    r.collectedRent + r.collectedDeposit,
+                                  )
                                 : "—"}
                             </TableCell>
                             <TableCell className="text-right tabular-nums">

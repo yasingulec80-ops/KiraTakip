@@ -81,6 +81,7 @@ interface ContractFormState {
   durationMonths: string;
   rentAmount: string;
   rentVat: "dahil" | "haric";
+  vatRate: string;
   depositAmount: string;
   depositMonths: string;
   status: "active" | "ended";
@@ -105,6 +106,7 @@ const emptyForm: ContractFormState = {
   durationMonths: "12",
   rentAmount: "",
   rentVat: "dahil",
+  vatRate: "20",
   depositAmount: "",
   depositMonths: "0",
   status: "active",
@@ -129,6 +131,7 @@ const formFromContract = (c: Contract): ContractFormState => ({
   durationMonths: String(c.durationMonths),
   rentAmount: String(c.rentAmount),
   rentVat: c.rentVat ?? "dahil",
+  vatRate: c.vatRate !== undefined ? String(c.vatRate) : "20",
   depositAmount: String(c.depositAmount),
   depositMonths: c.depositMonths ? String(c.depositMonths) : "0",
   status: c.status ?? "active",
@@ -313,6 +316,7 @@ export function ContractSection() {
       durationMonths: parseNumber(form.durationMonths) ?? 12,
       rentAmount: parseNumber(form.rentAmount) ?? 0,
       rentVat: form.rentVat,
+      vatRate: parseNumber(form.vatRate),
       depositAmount: parseNumber(form.depositAmount) ?? 0,
       depositMonths:
         (parseNumber(form.depositMonths) ?? 0) > 0
@@ -706,6 +710,20 @@ function ContractFormDialog({
   const annualRent = rentNum > 0 ? rentNum * 12 : null;
   const selectedOwner = owners.find((o) => o._id.toString() === form.ownerId);
   const ownerIsCompany = selectedOwner?.isCompany === true;
+  const vatRateNum = parseNumber(form.vatRate) ?? 0;
+  // KDV tutarı — kira bedeli KDV hariçse KDV ayrıca eklenir; dahilse içinden çıkarılır.
+  const vatAmount =
+    ownerIsCompany && vatRateNum > 0 && rentNum > 0
+      ? form.rentVat === "dahil"
+        ? rentNum - rentNum / (1 + vatRateNum / 100)
+        : rentNum * (vatRateNum / 100)
+      : null;
+  const vatInclusiveRent =
+    ownerIsCompany && vatRateNum > 0 && rentNum > 0 && vatAmount !== null
+      ? form.rentVat === "dahil"
+        ? rentNum
+        : rentNum + vatAmount
+      : null;
 
   const setFixture = (index: number, patch: Partial<FixtureDraft>) =>
     setForm((f) => ({
@@ -976,13 +994,13 @@ function ContractFormDialog({
 
         {/* Malik şirketse KDV tercihi — kira bedeli KDV dahil / hariç */}
         {ownerIsCompany && (
-          <div className="space-y-2.5 border border-border bg-muted/40 p-4">
+          <div className="space-y-3 border border-border bg-muted/40 p-4">
             <p className="text-sm font-medium">
               Kira Bedeli KDV Durumu
             </p>
             <p className="text-xs leading-5 text-muted-foreground">
               Malik şirket olduğu için kira bedelinin KDV dahil mi hariç mi
-              olduğu kontrat üzerinde belirtilir.
+              olduğu ve KDV oranı kontrat üzerinde belirtilir.
             </p>
             <RadioGroup
               value={form.rentVat}
@@ -1000,6 +1018,38 @@ function ContractFormDialog({
                 KDV Hariç
               </label>
             </RadioGroup>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="KDV Oranı" hint="%">
+                <Input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={form.vatRate}
+                  onChange={(e) => set("vatRate", e.target.value)}
+                  placeholder="20"
+                  className="rounded-none"
+                />
+              </Field>
+              <div className="rounded-none border border-border bg-card px-3 py-2">
+                <p className="eyebrow text-muted-foreground">
+                  Aylık KDV Tutarı
+                </p>
+                <p className="mt-1 font-display text-lg font-light tabular-nums">
+                  {vatAmount !== null
+                    ? formatCurrency(vatAmount)
+                    : "—"}
+                </p>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  {form.rentVat === "dahil"
+                    ? "KDV dahil fiyatın içinden hesaplanır"
+                    : "Kira bedeline ayrıca eklenir"}
+                  {vatInclusiveRent !== null && form.rentVat === "haric"
+                    ? ` · KDV dahil toplam ${formatCurrency(vatInclusiveRent)}`
+                    : ""}
+                </p>
+              </div>
+            </div>
           </div>
         )}
 
@@ -1720,6 +1770,7 @@ type ContractDocData = Pick<
   | "durationMonths"
   | "rentAmount"
   | "rentVat"
+  | "vatRate"
   | "depositAmount"
   | "depositMonths"
   | "guarantor"
@@ -1951,7 +2002,25 @@ function buildContractHtml(
             : contract.rentVat === "dahil"
               ? " (KDV dahil)"
               : "",
-        )} olarak hesaplanmıştır.</p>
+        )} olarak hesaplanmıştır.${
+          contract.vatRate
+            ? ` KDV oranı %${esc(String(contract.vatRate))} olarak uygulanır; aylık KDV tutarı ${esc(
+                tl(
+                  contract.rentVat === "dahil"
+                    ? contract.rentAmount -
+                        contract.rentAmount / (1 + contract.vatRate / 100)
+                    : contract.rentAmount * (contract.vatRate / 100),
+                ),
+              )}, yıllık KDV tutarı ${esc(
+                tl(
+                  (contract.rentVat === "dahil"
+                    ? contract.rentAmount -
+                        contract.rentAmount / (1 + contract.vatRate / 100)
+                    : contract.rentAmount * (contract.vatRate / 100)) * 12,
+                ),
+              )} olarak hesaplanmıştır.`
+            : ""
+        }</p>
 
         <h2>MADDE 5 — DEPOZİTO</h2>
         <p class="clause">Depozito tutarı ${esc(tl(contract.depositAmount))} olarak belirlenmiştir. ${
