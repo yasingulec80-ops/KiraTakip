@@ -56,3 +56,46 @@ export const updateReminderSettings = mutation({
     return true;
   },
 });
+
+const GENERAL_CONDITIONS_KEY = "generalConditions";
+
+/** Kayıtlı kontrat genel koşulları (madde listesi). Henüz kaydedilmemişse null döner. */
+export const getGeneralConditions = query({
+  handler: async (ctx) => {
+    const doc = await ctx.db
+      .query("settings")
+      .withIndex("by_key", (q) => q.eq("key", GENERAL_CONDITIONS_KEY))
+      .first();
+    return doc?.generalConditions ?? null;
+  },
+});
+
+/** Kontrat genel koşullarını günceller (yalnızca yönetici). */
+export const updateGeneralConditions = mutation({
+  args: {
+    conditions: v.array(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const actor = await requireActor(ctx);
+    if (actor.role !== ROLES.ADMIN) {
+      throw new ConvexError("Yalnızca yönetici genel koşulları değiştirebilir.");
+    }
+
+    const clean = args.conditions
+      .map((s) => s.trim())
+      .filter((s) => s !== "");
+    const existing = await ctx.db
+      .query("settings")
+      .withIndex("by_key", (q) => q.eq("key", GENERAL_CONDITIONS_KEY))
+      .first();
+    if (existing) {
+      await ctx.db.patch(existing._id, { generalConditions: clean });
+    } else {
+      await ctx.db.insert("settings", {
+        key: GENERAL_CONDITIONS_KEY,
+        generalConditions: clean,
+      });
+    }
+    return true;
+  },
+});

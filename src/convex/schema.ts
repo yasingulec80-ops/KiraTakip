@@ -253,6 +253,7 @@ const schema = defineSchema(
       daysBefore: v.optional(v.number()), // vadeden kaç gün önce hatırlatılacağı
       notifyTenant: v.optional(v.boolean()), // kiracıya e-posta
       notifyOwner: v.optional(v.boolean()), // malike e-posta
+      generalConditions: v.optional(v.array(v.string())), // kontrat genel koşulları (madde listesi)
     }).index("by_key", ["key"]),
 
     // Kira hatırlatma e-postaları — gönderim kaydı (mükerrer gönderimi önler)
