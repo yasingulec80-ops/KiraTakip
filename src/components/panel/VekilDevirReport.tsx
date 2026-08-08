@@ -39,6 +39,7 @@ const DETAIL_HEADERS = [
   "Tahsil Edilen Depozito",
   "Kira Devri",
   "Depozito Devri",
+  "Vekil Alacak",
   "Teslim Bekleyen",
 ];
 
@@ -50,6 +51,7 @@ interface SummaryRow {
   collectedDeposit: number;
   rentTransfer: number;
   depositTransfer: number;
+  vekilAlacak: number;
 }
 
 interface DetailRow extends SummaryRow {
@@ -63,11 +65,22 @@ interface ContractData {
   collectedDeposit: number;
   rentTransfer: number;
   depositTransfer: number;
+  vekilAlacak: number;
   firstCollectionDate: number;
 }
 
-const remainingOf = (c: number, d: number, rt: number, dt: number): number =>
-  c + d - rt - dt;
+/**
+ * Teslim bekleyen net tutar — vekilin malikten olan alacağı (kira/masraf
+ * ödemeleri) düşüldükten sonra teslim edilecek tutar. Negatife düşemez:
+ * alacak, eldeki tahsilattan fazlaysa teslim bekleyen 0 kabul edilir.
+ */
+const remainingOf = (
+  c: number,
+  d: number,
+  rt: number,
+  dt: number,
+  alacak = 0,
+): number => Math.max(0, c + d - rt - dt - alacak);
 
 /** Vekil tahsilat ve devirlerinin malik bazında özet raporu + kontrat ayrıntısı. */
 export function VekilDevirReport() {
@@ -88,11 +101,27 @@ export function VekilDevirReport() {
     subtitle: string;
   } | null>(null);
 
+  /**
+   * Vekilin malikten olan alacağı: vekil adına yapılan ödemeler (vekilin
+   * ödediği kira, vekilin ödediği masraflar ve pozitif düzeltmeler).
+   * Devir kayıtları alacak değildir — onlar tahsilatın teslim edilmesidir.
+   */
+  const vekilAlacakOf = (ownerId: string): number =>
+    (entries ?? [])
+      .filter(
+        (e) =>
+          e.personType === "proxy" &&
+          e.personId.toString() === ownerId &&
+          e.kind !== "transfer" &&
+          e.amount > 0,
+      )
+      .reduce((sum, e) => sum + e.amount, 0);
+
   /** Vekilin tahsil edip henüz devretmediği tutarlar (kira / depozito ayrı). */
   const devirablesFor = (
     ownerId: string,
-  ): { rent: number; deposit: number } =>
-    (entries ?? [])
+  ): { rent: number; deposit: number } => {
+    const gross = (entries ?? [])
       .filter(
         (e) => e.personType === "proxy" && e.personId.toString() === ownerId,
       )
@@ -111,6 +140,13 @@ export function VekilDevirReport() {
         },
         { rent: 0, deposit: 0 },
       );
+    // Alacak (vekil adına ödenen kira/masraflar) tahsil edilen tutara mahsup edilir.
+    const alacak = vekilAlacakOf(ownerId);
+    return {
+      rent: Math.max(0, gross.rent - alacak),
+      deposit: gross.deposit,
+    };
+  };
 
   const openDevir = (ownerId: string, ownerName: string, vekilName: string) => {
     setDeviring({
@@ -206,11 +242,7 @@ export function VekilDevirReport() {
       if (!vd) continue;
       const isDeposit = transferIsDeposit(e.description);
 
-      if (
-        e.kind === "collection" &&
-        e.description.startsWith("Vekil tahsilatı")
-      ) {
-        const cid = e.contractId?.toString() ?? "";
+      const ensureContract = (cid: string, date: number): ContractData => {
         let cd = vd.contracts.get(cid);
         if (!cd) {
           cd = {
@@ -219,34 +251,37 @@ export function VekilDevirReport() {
             collectedDeposit: 0,
             rentTransfer: 0,
             depositTransfer: 0,
-            firstCollectionDate: e.date,
+            vekilAlacak: 0,
+            firstCollectionDate: date,
           };
           vd.contracts.set(cid, cd);
         }
+        return cd;
+      };
+
+      if (
+        e.kind === "collection" &&
+        e.description.startsWith("Vekil tahsilatı")
+      ) {
+        const cid = e.contractId?.toString() ?? "";
+        const cd = ensureContract(cid, e.date);
         cd.firstCollectionDate = Math.min(cd.firstCollectionDate, e.date);
         if (isDeposit) cd.collectedDeposit += Math.abs(e.amount);
         else cd.collectedRent += Math.abs(e.amount);
       } else if (e.kind === "transfer") {
         if (e.contractId) {
           // Depozito üzerinden iade (vekil) — doğrudan kontrata bağlı.
-          const cid = e.contractId.toString();
-          let cd = vd.contracts.get(cid);
-          if (!cd) {
-            cd = {
-              propertyId: e.propertyId?.toString() ?? "",
-              collectedRent: 0,
-              collectedDeposit: 0,
-              rentTransfer: 0,
-              depositTransfer: 0,
-              firstCollectionDate: e.date,
-            };
-            vd.contracts.set(cid, cd);
-          }
+          const cd = ensureContract(e.contractId.toString(), e.date);
           cd.depositTransfer += e.amount;
         } else {
           // Genel kira devri — en eski tahsilat öncelikli olarak kontratlara dağıtılır.
           vd.rentTransfers.push({ amount: e.amount, date: e.date });
         }
+      } else if (e.amount > 0) {
+        // Vekil alacak — vekil adına ödenen kira, masraflar ve pozitif düzeltmeler.
+        const cid = e.contractId?.toString() ?? "";
+        const cd = ensureContract(cid, e.date);
+        cd.vekilAlacak += e.amount;
       }
     }
 
@@ -282,11 +317,13 @@ export function VekilDevirReport() {
       let collectedDeposit = 0;
       let rentTransfer = 0;
       let depositTransfer = 0;
+      let vekilAlacak = 0;
       for (const cd of vd.contracts.values()) {
         collectedRent += cd.collectedRent;
         collectedDeposit += cd.collectedDeposit;
         rentTransfer += cd.rentTransfer;
         depositTransfer += cd.depositTransfer;
+        vekilAlacak += cd.vekilAlacak;
       }
       summary.push({
         ownerId,
@@ -296,6 +333,7 @@ export function VekilDevirReport() {
         collectedDeposit,
         rentTransfer,
         depositTransfer,
+        vekilAlacak,
       });
 
       for (const [cid, cd] of vd.contracts) {
@@ -303,7 +341,8 @@ export function VekilDevirReport() {
           cd.collectedRent === 0 &&
           cd.collectedDeposit === 0 &&
           cd.rentTransfer === 0 &&
-          cd.depositTransfer === 0
+          cd.depositTransfer === 0 &&
+          cd.vekilAlacak === 0
         ) {
           continue;
         }
@@ -326,6 +365,7 @@ export function VekilDevirReport() {
           collectedDeposit: cd.collectedDeposit,
           rentTransfer: cd.rentTransfer,
           depositTransfer: cd.depositTransfer,
+          vekilAlacak: cd.vekilAlacak,
         });
       }
     }
@@ -366,8 +406,15 @@ export function VekilDevirReport() {
           collectedDeposit: acc.collectedDeposit + r.collectedDeposit,
           rentTransfer: acc.rentTransfer + r.rentTransfer,
           depositTransfer: acc.depositTransfer + r.depositTransfer,
+          vekilAlacak: acc.vekilAlacak + r.vekilAlacak,
         }),
-        { collectedRent: 0, collectedDeposit: 0, rentTransfer: 0, depositTransfer: 0 },
+        {
+          collectedRent: 0,
+          collectedDeposit: 0,
+          rentTransfer: 0,
+          depositTransfer: 0,
+          vekilAlacak: 0,
+        },
       ),
     [summaryRows],
   );
@@ -376,6 +423,7 @@ export function VekilDevirReport() {
     summaryTotals.collectedDeposit,
     summaryTotals.rentTransfer,
     summaryTotals.depositTransfer,
+    summaryTotals.vekilAlacak,
   );
 
   const detailExportRows = detailRows.map((r) => [
@@ -387,11 +435,13 @@ export function VekilDevirReport() {
     r.collectedDeposit,
     r.rentTransfer,
     r.depositTransfer,
+    r.vekilAlacak,
     remainingOf(
       r.collectedRent,
       r.collectedDeposit,
       r.rentTransfer,
       r.depositTransfer,
+      r.vekilAlacak,
     ),
   ]);
 
@@ -464,6 +514,7 @@ export function VekilDevirReport() {
                     <TableHead className="text-right">Tahsil Edilen Depozito</TableHead>
                     <TableHead className="text-right">Kira Devri</TableHead>
                     <TableHead className="text-right">Depozito Devri</TableHead>
+                    <TableHead className="text-right">Vekil Alacak</TableHead>
                     <TableHead className="text-right">Teslim Bekleyen</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -474,6 +525,7 @@ export function VekilDevirReport() {
                       r.collectedDeposit,
                       r.rentTransfer,
                       r.depositTransfer,
+                      r.vekilAlacak,
                     );
                     return (
                       <TableRow key={r.ownerId} className="align-middle">
@@ -496,6 +548,9 @@ export function VekilDevirReport() {
                           {r.depositTransfer > 0
                             ? formatCurrency(r.depositTransfer)
                             : "—"}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {r.vekilAlacak > 0 ? formatCurrency(r.vekilAlacak) : "—"}
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
                           {remaining > 0 ? (
@@ -540,6 +595,15 @@ export function VekilDevirReport() {
                 <span className="font-medium text-foreground">
                   {formatCurrency(summaryTotals.depositTransfer)}
                 </span>
+                {summaryTotals.vekilAlacak > 0 && (
+                  <>
+                    {" "}
+                    · vekil alacak{" "}
+                    <span className="font-medium text-foreground">
+                      {formatCurrency(summaryTotals.vekilAlacak)}
+                    </span>
+                  </>
+                )}
                 {totalRemaining > 0 && (
                   <>
                     {" "}
@@ -579,6 +643,7 @@ export function VekilDevirReport() {
                         <TableHead className="text-right">Tahsil Edilen Depozito</TableHead>
                         <TableHead className="text-right">Kira Devri</TableHead>
                         <TableHead className="text-right">Depozito Devri</TableHead>
+                        <TableHead className="text-right">Vekil Alacak</TableHead>
                         <TableHead className="text-right">Teslim Bekleyen</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -589,6 +654,7 @@ export function VekilDevirReport() {
                           r.collectedDeposit,
                           r.rentTransfer,
                           r.depositTransfer,
+                          r.vekilAlacak,
                         );
                         return (
                           <TableRow key={`${r.ownerId}-${i}`} className="align-middle">
@@ -615,6 +681,9 @@ export function VekilDevirReport() {
                               {r.depositTransfer > 0
                                 ? formatCurrency(r.depositTransfer)
                                 : "—"}
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums">
+                              {r.vekilAlacak > 0 ? formatCurrency(r.vekilAlacak) : "—"}
                             </TableCell>
                             <TableCell className="text-right font-medium tabular-nums">
                               {remaining > 0 ? (
