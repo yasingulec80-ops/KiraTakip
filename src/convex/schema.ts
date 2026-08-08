@@ -49,6 +49,13 @@ export const fixtureValidator = v.object({
 });
 export type Fixture = Infer<typeof fixtureValidator>;
 
+// KDV durumu — malik şirket olduğunda kira bedeli KDV dahil/hariç
+export const rentVatValidator = v.union(
+  v.literal("dahil"),
+  v.literal("haric"),
+);
+export type RentVat = Infer<typeof rentVatValidator>;
+
 // Kontrat durumu — sözleşme aktif veya sona ermiş
 export const contractStatusValidator = v.union(
   v.literal("active"),
@@ -146,7 +153,7 @@ const schema = defineSchema(
 
     // Malikler — property owners (with optional vekil/proxy)
     owners: defineTable({
-      name: v.string(), // Adı Soyadı
+      name: v.string(), // Adı Soyadı (şirketse ünvan)
       tcNo: v.string(), // TC Kimlik Numarası
       phone: v.string(), // Telefon Numarası
       address: v.string(), // Adresi
@@ -154,17 +161,27 @@ const schema = defineSchema(
       bankName: v.string(), // Banka Adı
       iban: v.string(), // IBAN Numarası
       proxy: proxyValidator, // Vekil (nullable)
+      isCompany: v.optional(v.boolean()), // şirket mi?
+      taxOffice: v.optional(v.string()), // vergi dairesi
+      taxNumber: v.optional(v.string()), // vergi numarası
+      signatoryName: v.optional(v.string()), // imza yetkilisi adı soyadı
+      signatoryTcNo: v.optional(v.string()), // imza yetkilisi TC
       createdBy: v.optional(v.id("users")),
     }),
 
     // Kiracılar — tenants (with optional kefil/guarantor)
     tenants: defineTable({
-      name: v.string(), // Adı Soyadı
+      name: v.string(), // Adı Soyadı (şirketse ünvan)
       tcNo: v.string(), // TC Kimlik Numarası
       phone: v.string(), // Telefon Numarası
       address: v.string(), // Adresi
       email: v.string(), // Mail Adresi
       guarantor: guarantorValidator, // Kefil (nullable)
+      isCompany: v.optional(v.boolean()), // şirket mi?
+      taxOffice: v.optional(v.string()), // vergi dairesi
+      taxNumber: v.optional(v.string()), // vergi numarası
+      signatoryName: v.optional(v.string()), // imza yetkilisi adı soyadı
+      signatoryTcNo: v.optional(v.string()), // imza yetkilisi TC
       createdBy: v.optional(v.id("users")),
     }),
 
@@ -176,6 +193,7 @@ const schema = defineSchema(
       startDate: v.number(), // Başlangıç tarihi (ms)
       durationMonths: v.number(), // Kira süresi (ay)
       rentAmount: v.number(), // Aylık kira
+      rentVat: v.optional(rentVatValidator), // KDV dahil / hariç (malik şirketse)
       depositAmount: v.number(), // Depozito
       depositMonths: v.optional(v.number()), // Depozito kaç aylık kira karşılığı
       depositStatus: v.optional(depositStatusValidator), // Yalnızca iade takibi (Depozitolar modülü)

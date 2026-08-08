@@ -20,6 +20,11 @@ const ownerArgs = {
   bankName: v.string(),
   iban: v.string(),
   proxy: proxyValidator,
+  isCompany: v.optional(v.boolean()),
+  taxOffice: v.optional(v.string()),
+  taxNumber: v.optional(v.string()),
+  signatoryName: v.optional(v.string()),
+  signatoryTcNo: v.optional(v.string()),
 };
 
 /** List all owners (authenticated users only). */
@@ -40,6 +45,11 @@ export const create = mutation({
     return await ctx.db.insert("owners", {
       ...args,
       proxy: args.proxy ?? null,
+      isCompany: args.isCompany ?? false,
+      taxOffice: args.taxOffice,
+      taxNumber: args.taxNumber,
+      signatoryName: args.signatoryName,
+      signatoryTcNo: args.signatoryTcNo,
       createdBy: user._id,
     });
   },

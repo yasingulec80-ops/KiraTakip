@@ -7,6 +7,7 @@ import {
   contractStatusValidator,
   fixtureValidator,
   guarantorValidator,
+  rentVatValidator,
 } from "./schema";
 import {
   deleteLedgerForReference,
@@ -30,6 +31,7 @@ const contractArgs = {
   startDate: v.number(),
   durationMonths: v.number(),
   rentAmount: v.number(),
+  rentVat: v.optional(rentVatValidator),
   depositAmount: v.number(),
   depositMonths: v.optional(v.number()),
   guarantor: v.optional(guarantorValidator),
@@ -132,6 +134,7 @@ export const update = mutation({
       startDate: data.startDate,
       durationMonths: data.durationMonths,
       rentAmount: data.rentAmount,
+      rentVat: data.rentVat,
       depositAmount: data.depositAmount,
       depositMonths: data.depositMonths,
       guarantor: data.guarantor,

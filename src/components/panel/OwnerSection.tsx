@@ -35,8 +35,13 @@ import { SectionToolbar } from "./SectionToolbar";
 type Owner = Doc<"owners">;
 
 interface OwnerFormState {
+  isCompany: boolean;
   name: string;
   tcNo: string;
+  taxOffice: string;
+  taxNumber: string;
+  signatoryName: string;
+  signatoryTcNo: string;
   phone: string;
   address: string;
   email: string;
@@ -49,8 +54,13 @@ interface OwnerFormState {
 }
 
 const emptyForm: OwnerFormState = {
+  isCompany: false,
   name: "",
   tcNo: "",
+  taxOffice: "",
+  taxNumber: "",
+  signatoryName: "",
+  signatoryTcNo: "",
   phone: "",
   address: "",
   email: "",
@@ -63,8 +73,13 @@ const emptyForm: OwnerFormState = {
 };
 
 const formFromOwner = (o: Owner): OwnerFormState => ({
+  isCompany: o.isCompany === true,
   name: o.name,
   tcNo: o.tcNo,
+  taxOffice: o.taxOffice ?? "",
+  taxNumber: o.taxNumber ?? "",
+  signatoryName: o.signatoryName ?? "",
+  signatoryTcNo: o.signatoryTcNo ?? "",
   phone: o.phone,
   address: o.address,
   email: o.email,
@@ -77,8 +92,12 @@ const formFromOwner = (o: Owner): OwnerFormState => ({
 });
 
 const CSV_HEADERS = [
-  "Adı Soyadı",
-  "TC Kimlik No",
+  "Tür",
+  "Adı Soyadı / Ünvan",
+  "TC / Vergi No",
+  "Vergi Dairesi",
+  "İmza Yetkilisi",
+  "İmza Yetkilisi TC",
   "Telefon",
   "Adres",
   "E-posta",
@@ -136,8 +155,12 @@ export function OwnerSection() {
   }, [owners, search, from, to]);
 
   const rows = (o: Owner): (string | null)[] => [
+    o.isCompany === true ? "Şirket" : "Kişi",
     o.name,
-    o.tcNo,
+    o.isCompany === true ? (o.taxNumber || o.tcNo) : o.tcNo,
+    o.isCompany === true ? (o.taxOffice ?? "") : "",
+    o.isCompany === true ? (o.signatoryName ?? "") : "",
+    o.isCompany === true ? (o.signatoryTcNo ?? "") : "",
     o.phone,
     o.address,
     o.email,
@@ -168,6 +191,11 @@ export function OwnerSection() {
       email: form.email.trim(),
       bankName: form.bankName.trim(),
       iban: form.iban.trim(),
+      isCompany: form.isCompany,
+      taxOffice: form.isCompany ? form.taxOffice.trim() : undefined,
+      taxNumber: form.isCompany ? form.taxNumber.trim() : undefined,
+      signatoryName: form.isCompany ? form.signatoryName.trim() : undefined,
+      signatoryTcNo: form.isCompany ? form.signatoryTcNo.trim() : undefined,
       proxy: form.hasProxy
         ? {
             name: form.proxyName.trim(),
@@ -253,8 +281,8 @@ export function OwnerSection() {
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
-                  <TableHead className="min-w-44">Adı Soyadı</TableHead>
-                  <TableHead>TC Kimlik</TableHead>
+                  <TableHead className="min-w-44">Adı Soyadı / Ünvan</TableHead>
+                  <TableHead>TC / Vergi No</TableHead>
                   <TableHead>Telefon</TableHead>
                   <TableHead>Adres</TableHead>
                   <TableHead>E-posta</TableHead>
@@ -267,13 +295,22 @@ export function OwnerSection() {
                 {filtered.map((o) => (
                   <TableRow key={o._id} className="align-middle">
                     <TableCell>
-                      <div className="font-medium">{o.name}</div>
+                      <div className="flex items-center gap-2 font-medium">
+                        {o.name}
+                        {o.isCompany && (
+                          <Badge variant="outline" className="rounded-none">
+                            Şirket
+                          </Badge>
+                        )}
+                      </div>
                       <div className="text-xs text-muted-foreground">
                         {formatDate(o._creationTime)}
                       </div>
                     </TableCell>
                     <TableCell className="font-mono text-[13px]">
-                      {o.tcNo || "—"}
+                      {o.isCompany
+                        ? (o.taxNumber || o.tcNo || "—")
+                        : (o.tcNo || "—")}
                     </TableCell>
                     <TableCell className="text-sm">{o.phone || "—"}</TableCell>
                     <TableCell className="max-w-44 truncate text-sm text-muted-foreground">
@@ -384,12 +421,21 @@ function OwnerFormDialog({
   ) => setForm((f) => ({ ...f, [key]: value }));
 
   const submit = () => {
-    if (
-      form.name.trim() === "" ||
-      form.tcNo.trim() === "" ||
-      form.phone.trim() === ""
-    ) {
-      setError("Adı soyadı, TC kimlik ve telefon zorunludur.");
+    if (form.name.trim() === "" || form.phone.trim() === "") {
+      setError(
+        form.isCompany
+          ? "Şirket ünvanı ve telefon zorunludur."
+          : "Adı soyadı ve telefon zorunludur.",
+      );
+      return;
+    }
+    if (form.isCompany) {
+      if (form.taxNumber.trim() === "") {
+        setError("Vergi numarası zorunludur.");
+        return;
+      }
+    } else if (form.tcNo.trim() === "") {
+      setError("TC kimlik numarası zorunludur.");
       return;
     }
     if (
@@ -438,24 +484,87 @@ function OwnerFormDialog({
           </p>
         )}
 
-        <Row>
-          <Field label="Adı Soyadı" required>
-            <Input
-              value={form.name}
-              onChange={(e) => set("name", e.target.value)}
-              placeholder="örn. Ahmet Yılmaz"
-              className="rounded-none"
-            />
-          </Field>
-          <Field label="TC Kimlik Numarası" required>
-            <Input
-              value={form.tcNo}
-              onChange={(e) => set("tcNo", e.target.value)}
-              placeholder="11 haneli TC no"
-              className="rounded-none"
-            />
-          </Field>
-        </Row>
+        {/* Şirket tiki — seçilirse şirket bilgileri açılır */}
+        <div className="flex items-center gap-2.5">
+          <Checkbox
+            checked={form.isCompany}
+            onCheckedChange={(checked) => set("isCompany", checked === true)}
+          />
+          <span className="text-sm font-medium">
+            Malik bir şirket
+          </span>
+          <span className="text-xs text-muted-foreground">
+            Şirket ünvanı ve vergi bilgileriyle kaydedilir
+          </span>
+        </div>
+
+        {form.isCompany ? (
+          <div className="space-y-4 border border-border bg-muted/40 p-4">
+            <Row>
+              <Field label="Şirket Ünvanı" required>
+                <Input
+                  value={form.name}
+                  onChange={(e) => set("name", e.target.value)}
+                  placeholder="örn. Yılmaz Gayrimenkul A.Ş."
+                  className="rounded-none"
+                />
+              </Field>
+              <Field label="Vergi Numarası" required>
+                <Input
+                  value={form.taxNumber}
+                  onChange={(e) => set("taxNumber", e.target.value)}
+                  placeholder="10 haneli vergi no"
+                  className="rounded-none"
+                />
+              </Field>
+            </Row>
+            <Row>
+              <Field label="Vergi Dairesi">
+                <Input
+                  value={form.taxOffice}
+                  onChange={(e) => set("taxOffice", e.target.value)}
+                  placeholder="örn. Kadıköy VD"
+                  className="rounded-none"
+                />
+              </Field>
+              <Field label="İmza Yetkilisi Adı Soyadı">
+                <Input
+                  value={form.signatoryName}
+                  onChange={(e) => set("signatoryName", e.target.value)}
+                  placeholder="Şirketi imzalayacak kişi"
+                  className="rounded-none"
+                />
+              </Field>
+            </Row>
+            <Field label="İmza Yetkilisi TC Kimlik Numarası">
+              <Input
+                value={form.signatoryTcNo}
+                onChange={(e) => set("signatoryTcNo", e.target.value)}
+                placeholder="11 haneli TC no"
+                className="rounded-none"
+              />
+            </Field>
+          </div>
+        ) : (
+          <Row>
+            <Field label="Adı Soyadı" required>
+              <Input
+                value={form.name}
+                onChange={(e) => set("name", e.target.value)}
+                placeholder="örn. Ahmet Yılmaz"
+                className="rounded-none"
+              />
+            </Field>
+            <Field label="TC Kimlik Numarası" required>
+              <Input
+                value={form.tcNo}
+                onChange={(e) => set("tcNo", e.target.value)}
+                placeholder="11 haneli TC no"
+                className="rounded-none"
+              />
+            </Field>
+          </Row>
+        )}
 
         <Row>
           <Field label="Telefon Numarası" required>
@@ -582,7 +691,35 @@ function OwnerDetailDialog({
     >
       {owner && (
         <dl className="divide-y divide-border">
-          <DetailRow label="TC Kimlik" value={owner.tcNo} mono />
+          {owner.isCompany && (
+            <>
+              <DetailRow label="Tür" value="Şirket" />
+              <DetailRow label="Şirket Ünvanı" value={owner.name} />
+              <DetailRow
+                label="Vergi Dairesi"
+                value={owner.taxOffice || "—"}
+              />
+              <DetailRow label="Vergi No" value={owner.taxNumber || owner.tcNo} mono />
+              <DetailRow
+                label="İmza Yetkilisi"
+                value={
+                  owner.signatoryName || owner.signatoryTcNo ? (
+                    <div className="space-y-0.5">
+                      <div>{owner.signatoryName}</div>
+                      {owner.signatoryTcNo && (
+                        <div className="font-mono text-xs text-muted-foreground">
+                          TC {owner.signatoryTcNo}
+                        </div>
+                      )}
+                    </div>
+                  ) : undefined
+                }
+              />
+            </>
+          )}
+          {!owner.isCompany && (
+            <DetailRow label="TC Kimlik" value={owner.tcNo} mono />
+          )}
           <DetailRow label="Telefon" value={owner.phone} />
           <DetailRow label="Adres" value={owner.address} />
           <DetailRow label="E-posta" value={owner.email} />

@@ -18,6 +18,11 @@ const tenantArgs = {
   address: v.string(),
   email: v.string(),
   guarantor: guarantorValidator,
+  isCompany: v.optional(v.boolean()),
+  taxOffice: v.optional(v.string()),
+  taxNumber: v.optional(v.string()),
+  signatoryName: v.optional(v.string()),
+  signatoryTcNo: v.optional(v.string()),
 };
 
 /** List all tenants (authenticated users only). */
@@ -38,6 +43,11 @@ export const create = mutation({
     return await ctx.db.insert("tenants", {
       ...args,
       guarantor: args.guarantor ?? null,
+      isCompany: args.isCompany ?? false,
+      taxOffice: args.taxOffice,
+      taxNumber: args.taxNumber,
+      signatoryName: args.signatoryName,
+      signatoryTcNo: args.signatoryTcNo,
       createdBy: user._id,
     });
   },

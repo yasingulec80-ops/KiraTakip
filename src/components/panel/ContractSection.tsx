@@ -28,6 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { useAuth } from "@/hooks/use-auth";
@@ -79,6 +80,7 @@ interface ContractFormState {
   startDate: string;
   durationMonths: string;
   rentAmount: string;
+  rentVat: "dahil" | "haric";
   depositAmount: string;
   depositMonths: string;
   status: "active" | "ended";
@@ -102,6 +104,7 @@ const emptyForm: ContractFormState = {
   startDate: "",
   durationMonths: "12",
   rentAmount: "",
+  rentVat: "dahil",
   depositAmount: "",
   depositMonths: "0",
   status: "active",
@@ -125,6 +128,7 @@ const formFromContract = (c: Contract): ContractFormState => ({
   startDate: dateToInput(c.startDate),
   durationMonths: String(c.durationMonths),
   rentAmount: String(c.rentAmount),
+  rentVat: c.rentVat ?? "dahil",
   depositAmount: String(c.depositAmount),
   depositMonths: c.depositMonths ? String(c.depositMonths) : "0",
   status: c.status ?? "active",
@@ -308,6 +312,7 @@ export function ContractSection() {
       startDate: parseDateInput(form.startDate)!,
       durationMonths: parseNumber(form.durationMonths) ?? 12,
       rentAmount: parseNumber(form.rentAmount) ?? 0,
+      rentVat: form.rentVat,
       depositAmount: parseNumber(form.depositAmount) ?? 0,
       depositMonths:
         (parseNumber(form.depositMonths) ?? 0) > 0
@@ -698,6 +703,9 @@ function ContractFormDialog({
   const rentNum = parseNumber(form.rentAmount) ?? 0;
   const impliedDeposit =
     depositMonthsNum > 0 && rentNum > 0 ? rentNum * depositMonthsNum : null;
+  const annualRent = rentNum > 0 ? rentNum * 12 : null;
+  const selectedOwner = owners.find((o) => o._id.toString() === form.ownerId);
+  const ownerIsCompany = selectedOwner?.isCompany === true;
 
   const setFixture = (index: number, patch: Partial<FixtureDraft>) =>
     setForm((f) => ({
@@ -948,7 +956,15 @@ function ContractFormDialog({
               className="rounded-none"
             />
           </Field>
-          <Field label="Aylık Kira" required hint="₺">
+          <Field
+            label="Aylık Kira"
+            required
+            hint={
+              annualRent !== null
+                ? `yıllık ≈ ${formatNumber(annualRent)} ₺`
+                : "₺"
+            }
+          >
             <Input
               value={form.rentAmount}
               onChange={(e) => set("rentAmount", e.target.value)}
@@ -957,6 +973,35 @@ function ContractFormDialog({
             />
           </Field>
         </Row>
+
+        {/* Malik şirketse KDV tercihi — kira bedeli KDV dahil / hariç */}
+        {ownerIsCompany && (
+          <div className="space-y-2.5 border border-border bg-muted/40 p-4">
+            <p className="text-sm font-medium">
+              Kira Bedeli KDV Durumu
+            </p>
+            <p className="text-xs leading-5 text-muted-foreground">
+              Malik şirket olduğu için kira bedelinin KDV dahil mi hariç mi
+              olduğu kontrat üzerinde belirtilir.
+            </p>
+            <RadioGroup
+              value={form.rentVat}
+              onValueChange={(value) =>
+                set("rentVat", value as "dahil" | "haric")
+              }
+              className="flex flex-wrap gap-4"
+            >
+              <label className="flex cursor-pointer items-center gap-2 text-sm">
+                <RadioGroupItem value="dahil" />
+                KDV Dahil
+              </label>
+              <label className="flex cursor-pointer items-center gap-2 text-sm">
+                <RadioGroupItem value="haric" />
+                KDV Hariç
+              </label>
+            </RadioGroup>
+          </div>
+        )}
 
         <Row cols={2}>
           <Field label="Depozito Tutarı" hint="₺ · kaydedilince otomatik tahakkuk edilir">
@@ -1674,6 +1719,7 @@ type ContractDocData = Pick<
   | "startDate"
   | "durationMonths"
   | "rentAmount"
+  | "rentVat"
   | "depositAmount"
   | "depositMonths"
   | "guarantor"
@@ -1841,12 +1887,20 @@ function buildContractHtml(
         <h2>MADDE 1 — TARAFLAR</h2>
         <div>
           ${fieldRow("Kiracı", tenant?.name ?? "—")}
-          ${fieldRow("TC Kimlik No", tenant?.tcNo ?? "—")}
+          ${
+            tenant?.isCompany
+              ? `${fieldRow("Vergi No", tenant?.taxNumber || tenant?.tcNo || "—")}${tenant?.taxOffice ? fieldRow("Vergi Dairesi", tenant.taxOffice) : ""}${tenant?.signatoryName ? fieldRow("İmza Yetkilisi", tenant.signatoryName) : ""}`
+              : fieldRow("TC Kimlik No", tenant?.tcNo ?? "—")
+          }
           ${fieldRow("Telefon", tenant?.phone ?? "—")}
           ${fieldRow("Adres", tenant?.address ?? "—")}
           ${fieldRow("E-posta", tenant?.email ?? "—")}
           ${fieldRow("Kiraya Veren", owner?.name ?? "—")}
-          ${fieldRow("TC Kimlik No", owner?.tcNo ?? "—")}
+          ${
+            owner?.isCompany
+              ? `${fieldRow("Vergi No", owner?.taxNumber || owner?.tcNo || "—")}${owner?.taxOffice ? fieldRow("Vergi Dairesi", owner.taxOffice) : ""}${owner?.signatoryName ? fieldRow("İmza Yetkilisi", owner.signatoryName) : ""}`
+              : fieldRow("TC Kimlik No", owner?.tcNo ?? "—")
+          }
           ${fieldRow("Telefon", owner?.phone ?? "—")}
           ${
             owner?.proxy
@@ -1881,7 +1935,23 @@ function buildContractHtml(
         </div>
 
         <h2>MADDE 4 — KİRA BEDELİ</h2>
-        <p class="clause">Kiracı, kira bedelini her ayın başında ödemekle yükümlüdür. Aylık kira bedeli ${esc(tl(contract.rentAmount))} olarak belirlenmiştir.</p>
+        <p class="clause">Kiracı, kira bedelini her ayın başında ödemekle yükümlüdür. Aylık kira bedeli ${esc(
+          tl(contract.rentAmount),
+        )}${esc(
+          contract.rentVat === "haric"
+            ? " (KDV hariç)"
+            : contract.rentVat === "dahil"
+              ? " (KDV dahil)"
+              : "",
+        )} olarak belirlenmiştir. Yıllık kira bedeli ${esc(
+          tl(contract.rentAmount * 12),
+        )}${esc(
+          contract.rentVat === "haric"
+            ? " (KDV hariç)"
+            : contract.rentVat === "dahil"
+              ? " (KDV dahil)"
+              : "",
+        )} olarak hesaplanmıştır.</p>
 
         <h2>MADDE 5 — DEPOZİTO</h2>
         <p class="clause">Depozito tutarı ${esc(tl(contract.depositAmount))} olarak belirlenmiştir. ${

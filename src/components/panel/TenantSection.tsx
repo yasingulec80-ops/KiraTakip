@@ -35,8 +35,13 @@ import { SectionToolbar } from "./SectionToolbar";
 type Tenant = Doc<"tenants">;
 
 interface TenantFormState {
+  isCompany: boolean;
   name: string;
   tcNo: string;
+  taxOffice: string;
+  taxNumber: string;
+  signatoryName: string;
+  signatoryTcNo: string;
   phone: string;
   address: string;
   email: string;
@@ -49,8 +54,13 @@ interface TenantFormState {
 }
 
 const emptyForm: TenantFormState = {
+  isCompany: false,
   name: "",
   tcNo: "",
+  taxOffice: "",
+  taxNumber: "",
+  signatoryName: "",
+  signatoryTcNo: "",
   phone: "",
   address: "",
   email: "",
@@ -63,8 +73,13 @@ const emptyForm: TenantFormState = {
 };
 
 const formFromTenant = (t: Tenant): TenantFormState => ({
+  isCompany: t.isCompany === true,
   name: t.name,
   tcNo: t.tcNo,
+  taxOffice: t.taxOffice ?? "",
+  taxNumber: t.taxNumber ?? "",
+  signatoryName: t.signatoryName ?? "",
+  signatoryTcNo: t.signatoryTcNo ?? "",
   phone: t.phone,
   address: t.address,
   email: t.email,
@@ -77,8 +92,12 @@ const formFromTenant = (t: Tenant): TenantFormState => ({
 });
 
 const CSV_HEADERS = [
-  "Adı Soyadı",
-  "TC Kimlik No",
+  "Tür",
+  "Adı Soyadı / Ünvan",
+  "TC / Vergi No",
+  "Vergi Dairesi",
+  "İmza Yetkilisi",
+  "İmza Yetkilisi TC",
   "Telefon",
   "Adres",
   "E-posta",
@@ -133,8 +152,12 @@ export function TenantSection() {
   }, [tenants, search, from, to]);
 
   const rows = (t: Tenant): (string | null)[] => [
+    t.isCompany === true ? "Şirket" : "Kişi",
     t.name,
-    t.tcNo,
+    t.isCompany === true ? (t.taxNumber || t.tcNo) : t.tcNo,
+    t.isCompany === true ? (t.taxOffice ?? "") : "",
+    t.isCompany === true ? (t.signatoryName ?? "") : "",
+    t.isCompany === true ? (t.signatoryTcNo ?? "") : "",
     t.phone,
     t.address,
     t.email,
@@ -161,6 +184,11 @@ export function TenantSection() {
       phone: form.phone.trim(),
       address: form.address.trim(),
       email: form.email.trim(),
+      isCompany: form.isCompany,
+      taxOffice: form.isCompany ? form.taxOffice.trim() : undefined,
+      taxNumber: form.isCompany ? form.taxNumber.trim() : undefined,
+      signatoryName: form.isCompany ? form.signatoryName.trim() : undefined,
+      signatoryTcNo: form.isCompany ? form.signatoryTcNo.trim() : undefined,
       guarantor: form.hasGuarantor
         ? {
             name: form.guarantorName.trim(),
@@ -248,8 +276,8 @@ export function TenantSection() {
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
-                  <TableHead className="min-w-44">Adı Soyadı</TableHead>
-                  <TableHead>TC Kimlik</TableHead>
+                  <TableHead className="min-w-44">Adı Soyadı / Ünvan</TableHead>
+                  <TableHead>TC / Vergi No</TableHead>
                   <TableHead>Telefon</TableHead>
                   <TableHead>Adres</TableHead>
                   <TableHead>E-posta</TableHead>
@@ -261,13 +289,22 @@ export function TenantSection() {
                 {filtered.map((t) => (
                   <TableRow key={t._id} className="align-middle">
                     <TableCell>
-                      <div className="font-medium">{t.name}</div>
+                      <div className="flex items-center gap-2 font-medium">
+                        {t.name}
+                        {t.isCompany && (
+                          <Badge variant="outline" className="rounded-none">
+                            Şirket
+                          </Badge>
+                        )}
+                      </div>
                       <div className="text-xs text-muted-foreground">
                         {formatDate(t._creationTime)}
                       </div>
                     </TableCell>
                     <TableCell className="font-mono text-[13px]">
-                      {t.tcNo || "—"}
+                      {t.isCompany
+                        ? (t.taxNumber || t.tcNo || "—")
+                        : (t.tcNo || "—")}
                     </TableCell>
                     <TableCell className="text-sm">{t.phone || "—"}</TableCell>
                     <TableCell className="max-w-44 truncate text-sm text-muted-foreground">
@@ -373,12 +410,21 @@ function TenantFormDialog({
   ) => setForm((f) => ({ ...f, [key]: value }));
 
   const submit = () => {
-    if (
-      form.name.trim() === "" ||
-      form.tcNo.trim() === "" ||
-      form.phone.trim() === ""
-    ) {
-      setError("Adı soyadı, TC kimlik ve telefon zorunludur.");
+    if (form.name.trim() === "" || form.phone.trim() === "") {
+      setError(
+        form.isCompany
+          ? "Şirket ünvanı ve telefon zorunludur."
+          : "Adı soyadı ve telefon zorunludur.",
+      );
+      return;
+    }
+    if (form.isCompany) {
+      if (form.taxNumber.trim() === "") {
+        setError("Vergi numarası zorunludur.");
+        return;
+      }
+    } else if (form.tcNo.trim() === "") {
+      setError("TC kimlik numarası zorunludur.");
       return;
     }
     if (
@@ -427,24 +473,87 @@ function TenantFormDialog({
           </p>
         )}
 
-        <Row>
-          <Field label="Adı Soyadı" required>
-            <Input
-              value={form.name}
-              onChange={(e) => set("name", e.target.value)}
-              placeholder="örn. Ayşe Demir"
-              className="rounded-none"
-            />
-          </Field>
-          <Field label="TC Kimlik Numarası" required>
-            <Input
-              value={form.tcNo}
-              onChange={(e) => set("tcNo", e.target.value)}
-              placeholder="11 haneli TC no"
-              className="rounded-none"
-            />
-          </Field>
-        </Row>
+        {/* Şirket tiki — seçilirse şirket bilgileri açılır */}
+        <div className="flex items-center gap-2.5">
+          <Checkbox
+            checked={form.isCompany}
+            onCheckedChange={(checked) => set("isCompany", checked === true)}
+          />
+          <span className="text-sm font-medium">
+            Kiracı bir şirket
+          </span>
+          <span className="text-xs text-muted-foreground">
+            Şirket ünvanı ve vergi bilgileriyle kaydedilir
+          </span>
+        </div>
+
+        {form.isCompany ? (
+          <div className="space-y-4 border border-border bg-muted/40 p-4">
+            <Row>
+              <Field label="Şirket Ünvanı" required>
+                <Input
+                  value={form.name}
+                  onChange={(e) => set("name", e.target.value)}
+                  placeholder="örn. Demir İnşaat Ltd. Şti."
+                  className="rounded-none"
+                />
+              </Field>
+              <Field label="Vergi Numarası" required>
+                <Input
+                  value={form.taxNumber}
+                  onChange={(e) => set("taxNumber", e.target.value)}
+                  placeholder="10 haneli vergi no"
+                  className="rounded-none"
+                />
+              </Field>
+            </Row>
+            <Row>
+              <Field label="Vergi Dairesi">
+                <Input
+                  value={form.taxOffice}
+                  onChange={(e) => set("taxOffice", e.target.value)}
+                  placeholder="örn. Kadıköy VD"
+                  className="rounded-none"
+                />
+              </Field>
+              <Field label="İmza Yetkilisi Adı Soyadı">
+                <Input
+                  value={form.signatoryName}
+                  onChange={(e) => set("signatoryName", e.target.value)}
+                  placeholder="Şirketi imzalayacak kişi"
+                  className="rounded-none"
+                />
+              </Field>
+            </Row>
+            <Field label="İmza Yetkilisi TC Kimlik Numarası">
+              <Input
+                value={form.signatoryTcNo}
+                onChange={(e) => set("signatoryTcNo", e.target.value)}
+                placeholder="11 haneli TC no"
+                className="rounded-none"
+              />
+            </Field>
+          </div>
+        ) : (
+          <Row>
+            <Field label="Adı Soyadı" required>
+              <Input
+                value={form.name}
+                onChange={(e) => set("name", e.target.value)}
+                placeholder="örn. Ayşe Demir"
+                className="rounded-none"
+              />
+            </Field>
+            <Field label="TC Kimlik Numarası" required>
+              <Input
+                value={form.tcNo}
+                onChange={(e) => set("tcNo", e.target.value)}
+                placeholder="11 haneli TC no"
+                className="rounded-none"
+              />
+            </Field>
+          </Row>
+        )}
 
         <Row>
           <Field label="Telefon Numarası" required>
@@ -569,7 +678,39 @@ function TenantDetailDialog({
     >
       {tenant && (
         <dl className="divide-y divide-border">
-          <DetailRow label="TC Kimlik" value={tenant.tcNo} mono />
+          {tenant.isCompany && (
+            <>
+              <DetailRow label="Tür" value="Şirket" />
+              <DetailRow label="Şirket Ünvanı" value={tenant.name} />
+              <DetailRow
+                label="Vergi Dairesi"
+                value={tenant.taxOffice || "—"}
+              />
+              <DetailRow
+                label="Vergi No"
+                value={tenant.taxNumber || tenant.tcNo}
+                mono
+              />
+              <DetailRow
+                label="İmza Yetkilisi"
+                value={
+                  tenant.signatoryName || tenant.signatoryTcNo ? (
+                    <div className="space-y-0.5">
+                      <div>{tenant.signatoryName}</div>
+                      {tenant.signatoryTcNo && (
+                        <div className="font-mono text-xs text-muted-foreground">
+                          TC {tenant.signatoryTcNo}
+                        </div>
+                      )}
+                    </div>
+                  ) : undefined
+                }
+              />
+            </>
+          )}
+          {!tenant.isCompany && (
+            <DetailRow label="TC Kimlik" value={tenant.tcNo} mono />
+          )}
           <DetailRow label="Telefon" value={tenant.phone} />
           <DetailRow label="Adres" value={tenant.address} />
           <DetailRow label="E-posta" value={tenant.email} />
