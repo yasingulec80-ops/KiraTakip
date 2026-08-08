@@ -797,17 +797,18 @@ function ContractFormDialog({
             onValueChange={(value) => {
               const tenant = tenants.find((t) => t._id.toString() === value);
               setForm((f) => {
-                // Kefil açıksa ve alanlar boşsa kiracının kayıtlı kefiliyle otomatik doldur.
+                // Kefil açıksa, seçilen kiracının kayıtlı kefil bilgileri
+                // otomatik doldurulur (kiracı değişince alanlar yenilenir).
                 const g = tenant?.guarantor;
-                const empty = f.guarantorEnabled && f.guarantorName.trim() === "";
+                const fill = f.guarantorEnabled && value !== f.tenantId;
                 return {
                   ...f,
                   tenantId: value,
-                  guarantorName: empty && g ? g.name : f.guarantorName,
-                  guarantorTc: empty && g ? g.tcNo : f.guarantorTc,
-                  guarantorPhone: empty && g ? g.phone : f.guarantorPhone,
-                  guarantorAddress: empty && g ? g.address : f.guarantorAddress,
-                  guarantorEmail: empty && g ? g.email : f.guarantorEmail,
+                  guarantorName: fill ? (g?.name ?? "") : f.guarantorName,
+                  guarantorTc: fill ? (g?.tcNo ?? "") : f.guarantorTc,
+                  guarantorPhone: fill ? (g?.phone ?? "") : f.guarantorPhone,
+                  guarantorAddress: fill ? (g?.address ?? "") : f.guarantorAddress,
+                  guarantorEmail: fill ? (g?.email ?? "") : f.guarantorEmail,
                 };
               });
             }}
@@ -854,8 +855,8 @@ function ContractFormDialog({
             <span>
               <span className="block text-sm font-medium">Kefil</span>
               <span className="block text-xs leading-5 text-muted-foreground">
-                İşaretlenirse kefil bilgileri girilebilir ve kontrat belgesine
-                eklenir.
+                İşaretlendiğinde kiracının kayıtlı kefil bilgileri otomatik
+                doldurulur; gerekiyorsa değiştirebilirsiniz.
               </span>
             </span>
           </label>
