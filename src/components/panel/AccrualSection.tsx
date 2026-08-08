@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
 import {
@@ -40,7 +41,7 @@ import {
   printReport,
 } from "@/lib/export";
 import { useAction, useMutation, useQuery } from "convex/react";
-import { CalendarClock, Mail, Trash2 } from "lucide-react";
+import { CalendarClock, Mail, Settings2, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { DialogShell, Field, Row } from "./fields";
@@ -80,6 +81,8 @@ export function AccrualSection() {
   const createAccrual = useMutation(api.accruals.create);
   const removeAccrual = useMutation(api.accruals.remove);
   const sendReminders = useAction(api.reminders.sendRentReminders);
+  const reminderSettings = useQuery(api.settings.getReminderSettings);
+  const updateReminderSettings = useMutation(api.settings.updateReminderSettings);
 
   const [search, setSearch] = useState("");
   const [from, setFrom] = useState("");
@@ -87,6 +90,7 @@ export function AccrualSection() {
   const [formOpen, setFormOpen] = useState(false);
   const [deleting, setDeleting] = useState<Accrual | null>(null);
   const [sendingReminders, setSendingReminders] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const contractMap = useMemo(() => {
     const map = new Map<string, Contract>();
@@ -220,6 +224,20 @@ export function AccrualSection() {
     }
   };
 
+  const handleSaveSettings = async (form: {
+    daysBefore: number;
+    notifyTenant: boolean;
+    notifyOwner: boolean;
+  }) => {
+    try {
+      await updateReminderSettings(form);
+      toast.success("Hatırlatma ayarları kaydedildi.");
+      setSettingsOpen(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Kayıt başarısız.");
+    }
+  };
+
   const handleDelete = async () => {
     if (!deleting) return;
     try {
@@ -234,14 +252,12 @@ export function AccrualSection() {
   const handleSendReminders = async () => {
     setSendingReminders(true);
     try {
-      const result = await sendReminders({ daysBefore: 3 });
+      const result = await sendReminders({});
       if (!result.configured) {
-        toast.error(
-          "E-posta servisi yapılandırılmadı — RESEND_API_KEY ekleyin.",
-        );
+        toast.error("E-posta gönderim servisi yapılandırılmadı.");
       } else if (result.sent === 0 && result.failed === 0) {
         toast.info(
-          "Gönderilecek hatırlatma bulunamadı: 3 gün içinde vadesi gelen ödenmemiş tahakkuk yok veya tümüne zaten gönderildi.",
+          `Gönderilecek hatırlatma bulunamadı: ${reminderSettings?.daysBefore ?? 3} gün içinde vadesi gelen ödenmemiş tahakkuk yok veya tümüne zaten gönderildi.`,
         );
       } else if (result.failed > 0) {
         toast.warning(
@@ -280,18 +296,33 @@ export function AccrualSection() {
         addLabel="Tahakkuk Oluştur"
         onAdd={() => setFormOpen(true)}
         extra={
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="rounded-none"
-            disabled={sendingReminders}
-            onClick={handleSendReminders}
-            aria-label="Vadesi yaklaşan kiralar için hatırlatma e-postası gönder"
-          >
-            <Mail className="mr-2 h-4 w-4" />
-            {sendingReminders ? "Gönderiliyor…" : "Kira Hatırlatması Gönder"}
-          </Button>
+          <>
+            {isAdmin && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="rounded-none"
+                onClick={() => setSettingsOpen(true)}
+                aria-label="Hatırlatma ayarlarını düzenle"
+              >
+                <Settings2 className="mr-2 h-4 w-4" />
+                Ayarlar
+              </Button>
+            )}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="rounded-none"
+              disabled={sendingReminders}
+              onClick={handleSendReminders}
+              aria-label="Vadesi yaklaşan kiralar için hatırlatma e-postası gönder"
+            >
+              <Mail className="mr-2 h-4 w-4" />
+              {sendingReminders ? "Gönderiliyor…" : "Kira Hatırlatması Gönder"}
+            </Button>
+          </>
         }
       />
 
@@ -430,6 +461,13 @@ export function AccrualSection() {
         propertyMap={propertyMap}
         tenantMap={tenantMap}
         onSave={handleSave}
+      />
+
+      <ReminderSettingsDialog
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+        settings={reminderSettings}
+        onSave={handleSaveSettings}
       />
 
       <AlertDialog open={deleting !== null} onOpenChange={(open) => !open && setDeleting(null)}>
@@ -596,6 +634,133 @@ function AccrualFormDialog({
             />
           </Field>
         </Row>
+      </div>
+    </DialogShell>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+
+interface ReminderSettings {
+  daysBefore: number;
+  notifyTenant: boolean;
+  notifyOwner: boolean;
+}
+
+function ReminderSettingsDialog({
+  open,
+  onOpenChange,
+  settings,
+  onSave,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  settings: ReminderSettings | undefined;
+  onSave: (form: ReminderSettings) => void;
+}) {
+  const [daysBefore, setDaysBefore] = useState("3");
+  const [notifyTenant, setNotifyTenant] = useState(true);
+  const [notifyOwner, setNotifyOwner] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const [lastKey, setLastKey] = useState("");
+  const key = open ? "open" : "closed";
+  if (key !== lastKey) {
+    setLastKey(key);
+    if (settings) {
+      setDaysBefore(String(settings.daysBefore));
+      setNotifyTenant(settings.notifyTenant);
+      setNotifyOwner(settings.notifyOwner);
+    }
+    setError(null);
+  }
+
+  const submit = () => {
+    const value = parseNumber(daysBefore);
+    if (value === undefined || value < 1 || value > 30) {
+      setError("Pencere 1–30 gün arasında olmalıdır.");
+      return;
+    }
+    onSave({
+      daysBefore: Math.round(value),
+      notifyTenant,
+      notifyOwner,
+    });
+  };
+
+  return (
+    <DialogShell
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Hatırlatma Ayarları"
+      description="Kira hatırlatma e-postalarının kapsamını ve alıcılarını belirleyin."
+      footer={
+        <>
+          <Button
+            type="button"
+            variant="outline"
+            className="rounded-none"
+            onClick={() => onOpenChange(false)}
+          >
+            Vazgeç
+          </Button>
+          <Button type="button" className="rounded-none" onClick={submit}>
+            Kaydet
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-5">
+        {error && (
+          <p className="text-sm text-destructive" role="alert">
+            {error}
+          </p>
+        )}
+
+        <Field label="Hatırlatma Penceresi" hint="gün">
+          <Input
+            type="number"
+            min={1}
+            max={30}
+            value={daysBefore}
+            onChange={(e) => setDaysBefore(e.target.value)}
+            className="rounded-none"
+          />
+        </Field>
+        <p className="-mt-2 text-xs text-muted-foreground">
+          Vade tarihinden kaç gün önce hatırlatma gönderileceğini belirler. Günlük
+          otomatik gönderim ve manuel gönderim bu pencereyi kullanır.
+        </p>
+
+        <div className="space-y-3 border-t border-border pt-4">
+          <p className="eyebrow text-brand">Alıcılar</p>
+          <label className="flex cursor-pointer items-start gap-3">
+            <Checkbox
+              checked={notifyTenant}
+              onCheckedChange={(value) => setNotifyTenant(value === true)}
+              className="mt-0.5 rounded-none"
+            />
+            <span>
+              <span className="block text-sm font-medium">Kiracı</span>
+              <span className="block text-xs text-muted-foreground">
+                E-posta adresi kayıtlı kiracıya hatırlatma gönderilir.
+              </span>
+            </span>
+          </label>
+          <label className="flex cursor-pointer items-start gap-3">
+            <Checkbox
+              checked={notifyOwner}
+              onCheckedChange={(value) => setNotifyOwner(value === true)}
+              className="mt-0.5 rounded-none"
+            />
+            <span>
+              <span className="block text-sm font-medium">Malik</span>
+              <span className="block text-xs text-muted-foreground">
+                E-posta adresi kayıtlı malike hatırlatma gönderilir.
+              </span>
+            </span>
+          </label>
+        </div>
       </div>
     </DialogShell>
   );

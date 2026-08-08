@@ -227,6 +227,14 @@ const schema = defineSchema(
     }).index("by_property", ["propertyId"]),
 
     // Cari hesaplar — per-person ledger entries
+    // Uygulama ayarları (ör. kira hatırlatma tercihleri)
+    settings: defineTable({
+      key: v.string(),
+      daysBefore: v.optional(v.number()), // vadeden kaç gün önce hatırlatılacağı
+      notifyTenant: v.optional(v.boolean()), // kiracıya e-posta
+      notifyOwner: v.optional(v.boolean()), // malike e-posta
+    }).index("by_key", ["key"]),
+
     // Kira hatırlatma e-postaları — gönderim kaydı (mükerrer gönderimi önler)
     reminderLogs: defineTable({
       accrualId: v.id("accruals"),

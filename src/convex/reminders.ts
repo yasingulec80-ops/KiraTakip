@@ -1,7 +1,7 @@
 "use node";
 
 import { action } from "./_generated/server";
-import { internal } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import { createVlyIntegrations } from "@vly-ai/integrations";
 import { v } from "convex/values";
 
@@ -22,7 +22,7 @@ const esc = (value: string | number | null | undefined) =>
     .replace(/>/g, "&gt;");
 
 const buildEmailHtml = (row: {
-  tenantName: string;
+  recipientName: string;
   propertyName: string;
   period: string;
   amount: number;
@@ -33,7 +33,7 @@ const buildEmailHtml = (row: {
     <p style="margin: 0; font-size: 18px; letter-spacing: 0.02em;">Kira Takip</p>
     <p style="margin: 4px 0 0; font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: #6b6358;">Gayrimenkul Yönetim Paneli</p>
   </div>
-  <p style="font-size: 15px; line-height: 1.8;">Merhaba ${esc(row.tenantName)},</p>
+  <p style="font-size: 15px; line-height: 1.8;">Merhaba ${esc(row.recipientName)},</p>
   <p style="font-size: 15px; line-height: 1.8;">
     <strong>${esc(row.propertyName)}</strong> adresindeki kiracılığınıza ait
     <strong>${esc(row.period)}</strong> dönemi kira ödemesi için hatırlatma yapıyoruz.
@@ -64,16 +64,23 @@ const buildEmailHtml = (row: {
 /**
  * Send rent reminders for upcoming unpaid accruals through the platform's
  * email gateway (vly.email.send, billed via VLY_INTEGRATION_KEY).
+ * The reminder window and recipients come from the reminder settings
+ * (an explicit daysBefore argument overrides the configured window).
  * Returns { configured, sent, failed } so the UI can report the result.
  */
 export const sendRentReminders = action({
   args: { daysBefore: v.optional(v.number()) },
   handler: async (ctx, args) => {
-    const daysBefore = Math.max(1, Math.min(30, args.daysBefore ?? 3));
     const token = process.env.VLY_INTEGRATION_KEY;
     if (!token) {
       return { configured: false, sent: 0, failed: 0 };
     }
+
+    const settings = await ctx.runQuery(api.settings.getReminderSettings);
+    const daysBefore =
+      args.daysBefore !== undefined
+        ? Math.max(1, Math.min(30, args.daysBefore))
+        : settings.daysBefore;
 
     const vly = createVlyIntegrations({ deploymentToken: token });
     const rows = await ctx.runQuery(internal.reminder_data.listDueAccruals, {
@@ -84,25 +91,42 @@ export const sendRentReminders = action({
     let failed = 0;
 
     for (const row of rows) {
-      try {
-        const result = await vly.email.send({
-          to: row.tenantEmail,
-          subject: `Kira hatırlatması — ${row.propertyName} · ${row.period}`,
-          html: buildEmailHtml(row),
-        });
-        if (!result.success || result.data?.status === "failed") {
+      const recipients: { email: string; name: string }[] = [];
+      if (settings.notifyTenant && row.tenantEmail) {
+        recipients.push({ email: row.tenantEmail, name: row.tenantName });
+      }
+      if (settings.notifyOwner && row.ownerEmail) {
+        recipients.push({ email: row.ownerEmail, name: row.ownerName });
+      }
+
+      for (const recipient of recipients) {
+        if (row.alreadySent.includes(recipient.email)) continue;
+        try {
+          const result = await vly.email.send({
+            to: recipient.email,
+            subject: `Kira hatırlatması — ${row.propertyName} · ${row.period}`,
+            html: buildEmailHtml({
+              recipientName: recipient.name,
+              propertyName: row.propertyName,
+              period: row.period,
+              amount: row.amount,
+              dueDate: row.dueDate,
+            }),
+          });
+          if (!result.success || result.data?.status === "failed") {
+            failed += 1;
+            continue;
+          }
+        } catch {
           failed += 1;
           continue;
         }
-      } catch {
-        failed += 1;
-        continue;
+        await ctx.runMutation(internal.reminder_data.logReminderSent, {
+          accrualId: row.accrualId,
+          recipientEmail: recipient.email,
+        });
+        sent += 1;
       }
-      await ctx.runMutation(internal.reminder_data.logReminderSent, {
-        accrualId: row.accrualId,
-        recipientEmail: row.tenantEmail,
-      });
-      sent += 1;
     }
 
     return { configured: true, sent, failed };

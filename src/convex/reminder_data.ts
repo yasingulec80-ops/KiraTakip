@@ -9,12 +9,16 @@ interface DueAccrual {
   period: string;
   amount: number;
   dueDate: number;
+  propertyName: string;
   tenantName: string;
   tenantEmail: string;
-  propertyName: string;
+  ownerName: string;
+  ownerEmail: string;
+  /** Recipient emails already reminded for this accrual (dedupe). */
+  alreadySent: string[];
 }
 
-/** Upcoming unpaid accruals (due within N days) that have not been reminded yet. */
+/** Upcoming unpaid accruals (due within N days) with recipient contact info. */
 export const listDueAccruals = internalQuery({
   args: { daysBefore: v.number() },
   handler: async (ctx, { daysBefore }) => {
@@ -35,16 +39,15 @@ export const listDueAccruals = internalQuery({
     for (const accrual of due) {
       const contract = await ctx.db.get(accrual.contractId);
       if (!contract || contract.status === "ended") continue;
-      const tenant = await ctx.db.get(contract.tenantId);
-      if (!tenant?.email) continue;
 
-      const alreadySent = await ctx.db
+      const tenant = await ctx.db.get(contract.tenantId);
+      const owner = await ctx.db.get(contract.ownerId);
+      if (!tenant?.email && !owner?.email) continue;
+
+      const logs = await ctx.db
         .query("reminderLogs")
         .withIndex("by_accrual", (q) => q.eq("accrualId", accrual._id))
         .collect();
-      if (alreadySent.some((log) => log.recipientEmail === tenant.email)) {
-        continue;
-      }
 
       const property = await ctx.db.get(contract.propertyId);
       rows.push({
@@ -52,9 +55,12 @@ export const listDueAccruals = internalQuery({
         period: accrual.period,
         amount: accrual.amount,
         dueDate: accrual.dueDate,
-        tenantName: tenant.name,
-        tenantEmail: tenant.email,
         propertyName: property?.name ?? "Gayrimenkul",
+        tenantName: tenant?.name ?? "Kiracı",
+        tenantEmail: tenant?.email ?? "",
+        ownerName: owner?.name ?? "Malik",
+        ownerEmail: owner?.email ?? "",
+        alreadySent: logs.map((log) => log.recipientEmail),
       });
     }
     return rows;
