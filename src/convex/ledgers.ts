@@ -196,7 +196,8 @@ export const createManual = mutation({
  * Vekil devri — vekilin tahsil ettiği tutarın malike teslim edilmesi.
  * Vekilin cari hesabındaki borç (tahsil edilen kira/depozito) bu tutar
  * kadar kapatılır (+). Teslim edilebilir tutar, vekilin tahsil ettiği ve
- * henüz devretmediği toplam ile sınırlıdır.
+ * henüz devretmediği toplam ile sınırlıdır; transferType ile kira ve
+ * depozito ayrı ayrı sınırlanır.
  */
 export const devir = mutation({
   args: {
@@ -204,6 +205,9 @@ export const devir = mutation({
     amount: v.number(),
     date: v.number(),
     note: v.optional(v.string()),
+    transferType: v.optional(
+      v.union(v.literal("rent"), v.literal("deposit")),
+    ),
   },
   handler: async (ctx, args) => {
     const actor = await requireActor(ctx);
@@ -215,39 +219,49 @@ export const devir = mutation({
     if (args.amount <= 0) {
       throw new ConvexError("Devir tutarı pozitif olmalıdır.");
     }
+    const transferType = args.transferType ?? "rent";
 
-    // Vekilin tahsil ettiği ve henüz teslim etmediği tutar.
+    // Vekilin tahsil ettiği ve henüz teslim etmediği tutarlar (kira / depozito ayrı).
     const entries = await ctx.db
       .query("ledgerEntries")
       .withIndex("by_person", (q) =>
         q.eq("personType", "proxy").eq("personId", args.ownerId),
       )
       .collect();
-    const outstanding = entries.reduce((sum, e) => {
-      if (
-        e.kind === "collection" &&
-        e.description.startsWith("Vekil tahsilatı")
-      ) {
-        return sum + Math.abs(e.amount);
-      }
-      if (e.kind === "transfer") return sum - e.amount;
-      return sum;
-    }, 0);
-    if (args.amount > outstanding) {
+    const devirables = entries.reduce(
+      (acc, e) => {
+        const isDeposit = e.description.includes("depozito");
+        if (
+          e.kind === "collection" &&
+          e.description.startsWith("Vekil tahsilatı")
+        ) {
+          acc[isDeposit ? "deposit" : "rent"] += Math.abs(e.amount);
+        } else if (e.kind === "transfer") {
+          acc[isDeposit ? "deposit" : "rent"] -= e.amount;
+        }
+        return acc;
+      },
+      { rent: 0, deposit: 0 },
+    );
+    const available =
+      transferType === "deposit" ? devirables.deposit : devirables.rent;
+    if (args.amount > available) {
       throw new ConvexError(
-        `Teslim edilebilir tutar ${outstanding.toLocaleString("tr-TR")} ₺ ile sınırlıdır.`,
+        `Teslim edilebilir ${transferType === "deposit" ? "depozito" : "kira"} tutarı ${available.toLocaleString("tr-TR")} ₺ ile sınırlıdır.`,
       );
     }
 
+    const base =
+      transferType === "deposit"
+        ? "Vekil devri — depozito teslimi"
+        : "Vekil devri — tahsilat teslimi";
     await postLedgerEntry(ctx, actor, {
       personType: "proxy",
       personId: args.ownerId,
       ownerId: args.ownerId,
       kind: "transfer",
       amount: args.amount,
-      description: args.note
-        ? `Vekil devri — tahsilat teslimi · ${args.note}`
-        : "Vekil devri — tahsilat teslimi",
+      description: args.note ? `${base} · ${args.note}` : base,
       date: args.date,
     });
     return true;

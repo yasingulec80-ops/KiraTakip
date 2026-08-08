@@ -190,23 +190,35 @@ export function LedgerSection() {
       )
       .sort((a, b) => b.date - a.date);
 
-  /** Vekilin tahsil edip henüz malike teslim etmediği toplam tutar. */
-  const outstandingOf = (account: PersonAccount): number =>
+  /** Vekilin tahsil edip henüz malike teslim etmediği tutarlar (kira / depozito ayrı). */
+  const devirablesOf = (
+    account: PersonAccount,
+  ): { rent: number; deposit: number } =>
     (entries ?? [])
       .filter(
         (e) =>
           e.personType === "proxy" && e.personId.toString() === account.personId,
       )
-      .reduce((sum, e) => {
-        if (
-          e.kind === "collection" &&
-          e.description.startsWith("Vekil tahsilatı")
-        ) {
-          return sum + Math.abs(e.amount);
-        }
-        if (e.kind === "transfer") return sum - e.amount;
-        return sum;
-      }, 0);
+      .reduce(
+        (acc, e) => {
+          const isDeposit = e.description.includes("depozito");
+          if (
+            e.kind === "collection" &&
+            e.description.startsWith("Vekil tahsilatı")
+          ) {
+            acc[isDeposit ? "deposit" : "rent"] += Math.abs(e.amount);
+          } else if (e.kind === "transfer") {
+            acc[isDeposit ? "deposit" : "rent"] -= e.amount;
+          }
+          return acc;
+        },
+        { rent: 0, deposit: 0 },
+      );
+
+  const outstandingOf = (account: PersonAccount): number => {
+    const d = devirablesOf(account);
+    return d.rent + d.deposit;
+  };
 
   const entryRows = (account: PersonAccount): (string | number | null)[][] =>
     entriesOf(account).map((e) => [
@@ -266,7 +278,12 @@ export function LedgerSection() {
     toast.success("PDF dökümü hazırlanıyor.");
   };
 
-  const handleDevir = async (amount: number, date: string, note: string) => {
+  const handleDevir = async (
+    amount: number,
+    date: string,
+    note: string,
+    transferType: "rent" | "deposit",
+  ) => {
     if (!deviring) return;
     const parsedDate = parseDateInput(date);
     if (!parsedDate) {
@@ -279,8 +296,13 @@ export function LedgerSection() {
         amount,
         date: parsedDate,
         note: note.trim() || undefined,
+        transferType,
       });
-      toast.success("Devir işlendi; vekilin cari hesabındaki borç kapatıldı.");
+      toast.success(
+        transferType === "deposit"
+          ? "Depozito devri işlendi; vekilin cari hesabındaki borç kapatıldı."
+          : "Kira devri işlendi; vekilin cari hesabındaki borç kapatıldı.",
+      );
       setDeviring(null);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "İşlem başarısız.");
@@ -427,7 +449,7 @@ export function LedgerSection() {
                               setDeviring(a);
                             }}
                             aria-label="Tahsilat teslim et (devir)"
-                            title={`Teslim edilebilir: ${formatCurrency(outstandingOf(a))}`}
+                            title={`Teslim edilebilir: kira ${formatCurrency(devirablesOf(a).rent)} · depozito ${formatCurrency(devirablesOf(a).deposit)}`}
                           >
                             <HandCoins className="h-4 w-4" />
                           </Button>
@@ -484,7 +506,8 @@ export function LedgerSection() {
 
       <DevirDialog
         account={deviring}
-        devirable={deviring ? outstandingOf(deviring) : 0}
+        devirableRent={deviring ? devirablesOf(deviring).rent : 0}
+        devirableDeposit={deviring ? devirablesOf(deviring).deposit : 0}
         onOpenChange={(open) => !open && setDeviring(null)}
         onDevir={handleDevir}
       />
@@ -761,25 +784,35 @@ function PersonDetailDialog({
 
 function DevirDialog({
   account,
-  devirable,
+  devirableRent,
+  devirableDeposit,
   onOpenChange,
   onDevir,
 }: {
   account: PersonAccount | null;
-  devirable: number;
+  devirableRent: number;
+  devirableDeposit: number;
   onOpenChange: (open: boolean) => void;
-  onDevir: (amount: number, date: string, note: string) => void;
+  onDevir: (amount: number, date: string, note: string, transferType: "rent" | "deposit") => void;
 }) {
-  const [form, setForm] = useState({ amount: "", date: TODAY, note: "" });
+  const [form, setForm] = useState({
+    amount: "",
+    date: TODAY,
+    note: "",
+    transferType: "rent" as "rent" | "deposit",
+  });
   const [error, setError] = useState<string | null>(null);
 
   const [lastKey, setLastKey] = useState("");
   const key = account ? account.key : "closed";
   if (key !== lastKey) {
     setLastKey(key);
-    setForm({ amount: "", date: TODAY, note: "" });
+    setForm({ amount: "", date: TODAY, note: "", transferType: "rent" });
     setError(null);
   }
+
+  const devirableForType =
+    form.transferType === "deposit" ? devirableDeposit : devirableRent;
 
   const submit = () => {
     if (!account) return;
@@ -788,9 +821,9 @@ function DevirDialog({
       setError("Tutar geçerli bir değer olmalıdır.");
       return;
     }
-    if (amount > devirable) {
+    if (amount > devirableForType) {
       setError(
-        `Teslim edilebilir tutar ${formatCurrency(devirable)} ile sınırlıdır.`,
+        `Teslim edilebilir ${form.transferType === "deposit" ? "depozito" : "kira"} tutarı ${formatCurrency(devirableForType)} ile sınırlıdır.`,
       );
       return;
     }
@@ -798,7 +831,7 @@ function DevirDialog({
       setError("Devir tarihi zorunludur.");
       return;
     }
-    onDevir(amount, form.date, form.note);
+    onDevir(amount, form.date, form.note, form.transferType);
   };
 
   return (
@@ -807,9 +840,7 @@ function DevirDialog({
       onOpenChange={onOpenChange}
       title="Vekil Devri — Tahsilat Teslimi"
       description={
-        account
-          ? `${account.name} · ${account.subtitle} — teslim edilebilir ${formatCurrency(devirable)}`
-          : undefined
+        account ? `${account.name} · ${account.subtitle}` : undefined
       }
       footer={
         <>
@@ -834,12 +865,53 @@ function DevirDialog({
             {error}
           </p>
         )}
-        <p className="text-sm leading-6 text-muted-foreground">
-          Vekilin tahsil ettiği tutarın malike teslim edildiği kaydedilir;
-          vekilin cari hesabındaki borç bu tutar kadar kapatılır. Teslim
-          edilebilir tutar, vekilin tahsil edip henüz devretmediği toplamdır.
-        </p>
-        <Field label="Tutar" required hint={`teslim edilebilir ${formatCurrency(devirable)}`}>
+
+        <div className="grid gap-px border border-border bg-border sm:grid-cols-2">
+          <div className="bg-card p-4">
+            <p className="eyebrow text-muted-foreground">Teslim Edilebilir Kira</p>
+            <p className="mt-1.5 font-display text-lg font-light tabular-nums">
+              {formatCurrency(devirableRent)}
+            </p>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">
+              tahsil edilip devredilmemiş kira
+            </p>
+          </div>
+          <div className="bg-card p-4">
+            <p className="eyebrow text-muted-foreground">Teslim Edilebilir Depozito</p>
+            <p className="mt-1.5 font-display text-lg font-light tabular-nums">
+              {formatCurrency(devirableDeposit)}
+            </p>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">
+              tahsil edilip devredilmemiş depozito
+            </p>
+          </div>
+        </div>
+
+        <Field label="Devir Türü">
+          <Select
+            value={form.transferType}
+            onValueChange={(value) =>
+              setForm((f) => ({
+                ...f,
+                transferType: value as "rent" | "deposit",
+              }))
+            }
+          >
+            <SelectTrigger className="rounded-none">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="rent">Kira</SelectItem>
+              <SelectItem value="deposit">Depozito</SelectItem>
+            </SelectContent>
+          </Select>
+        </Field>
+
+        <Field
+          label="Tutar"
+          required
+          hint={`teslim edilebilir ${formatCurrency(devirableForType)}`}
+        >
           <div className="flex gap-2">
             <Input
               value={form.amount}
@@ -852,7 +924,7 @@ function DevirDialog({
               variant="outline"
               className="shrink-0 rounded-none"
               onClick={() =>
-                setForm((f) => ({ ...f, amount: String(devirable) }))
+                setForm((f) => ({ ...f, amount: String(devirableForType) }))
               }
             >
               Tümü
