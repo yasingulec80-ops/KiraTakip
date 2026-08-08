@@ -10,6 +10,34 @@ export const formatDate = (ts: number): string =>
 export const formatNumber = (value: number): string =>
   new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 2 }).format(value);
 
+export const formatCurrency = (value: number): string =>
+  new Intl.NumberFormat("tr-TR", {
+    style: "currency",
+    currency: "TRY",
+    maximumFractionDigits: 2,
+  }).format(value);
+
+/** Parse a numeric input that may use a Turkish decimal comma. */
+export const parseNumber = (value: string): number | undefined => {
+  if (value.trim() === "") return undefined;
+  const parsed = Number(value.replace(/\./g, "").replace(",", "."));
+  return Number.isFinite(parsed) ? parsed : undefined;
+};
+
+/** Convert a timestamp to a local date-input value (yyyy-MM-dd). */
+export const dateToInput = (ts: number): string => {
+  const d = new Date(ts);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+};
+
+/** Convert a date-input value to a timestamp at local midnight. */
+export const parseDateInput = (value: string): number | undefined => {
+  if (!value) return undefined;
+  const ts = new Date(`${value}T00:00:00`).getTime();
+  return Number.isFinite(ts) ? ts : undefined;
+};
+
 const dateStamp = () => {
   const d = new Date();
   const p = (n: number) => String(n).padStart(2, "0");
@@ -116,6 +144,74 @@ export function printReport(
     <tbody>${tbody}</tbody>
   </table>
   <div class="count">${rows.length} kayıt</div>
+</body>
+</html>`;
+
+  const iframe = document.createElement("iframe");
+  iframe.setAttribute("aria-hidden", "true");
+  iframe.style.position = "fixed";
+  iframe.style.right = "0";
+  iframe.style.bottom = "0";
+  iframe.style.width = "0";
+  iframe.style.height = "0";
+  iframe.style.border = "0";
+  iframe.srcdoc = html;
+  document.body.appendChild(iframe);
+  iframe.onload = () => {
+    try {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+    } catch {
+      // Popup/print blocked — ignore
+    }
+    setTimeout(() => iframe.remove(), 60_000);
+  };
+}
+
+/**
+ * Print an arbitrary document (e.g. an auto-generated rental contract) via
+ * a hidden iframe with the provided HTML body.
+ */
+export function printDocument(title: string, bodyHtml: string) {
+  const html = `<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8" />
+<title>${title}</title>
+<style>
+  @page { margin: 20mm 18mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Georgia", "Times New Roman", serif;
+    color: #2b2722;
+    margin: 0;
+    padding: 32px;
+    font-size: 13px;
+    line-height: 1.7;
+  }
+  .doc-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    border-bottom: 1.5px solid #2b2722;
+    padding-bottom: 12px; margin-bottom: 28px;
+  }
+  h1 { font-size: 20px; font-weight: 600; margin: 0; letter-spacing: 0.01em; }
+  .meta { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: #6b6358; }
+  h2 { font-size: 13px; font-weight: 600; margin: 26px 0 8px; letter-spacing: 0.04em; }
+  .clause { margin: 0 0 10px; text-align: justify; }
+  .field-row { display: flex; justify-content: space-between; border-bottom: 1px solid #e3ddd2; padding: 5px 0; }
+  .field-label { color: #6b6358; font-size: 11px; letter-spacing: 0.06em; }
+  .signatures { display: flex; justify-content: space-between; margin-top: 56px; gap: 40px; }
+  .signature { flex: 1; }
+  .signature .line { border-bottom: 1px solid #2b2722; height: 44px; }
+  .signature .name { margin-top: 8px; font-size: 11px; color: #6b6358; }
+</style>
+</head>
+<body>
+  <div class="doc-head">
+    <h1>${title}</h1>
+    <div class="meta">Kira Takip · Gayrimenkul Yönetim Paneli</div>
+  </div>
+  ${bodyHtml}
 </body>
 </html>`;
 

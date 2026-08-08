@@ -8,49 +8,41 @@ const MODULES = [
     num: "01",
     name: "Gayrimenkuller",
     desc: "Malik, adres, m², oda sayısı, cephe, sayaç numaraları ve demirbaş envanteri.",
-    v1: true,
   },
   {
     num: "02",
     name: "Malikler",
     desc: "İletişim, banka ve IBAN bilgileri. İsterseniz vekil tanımlayın.",
-    v1: true,
   },
   {
     num: "03",
     name: "Kiracılar",
     desc: "Kimlik ve iletişim bilgileri. İsterseniz kefil ekleyin.",
-    v1: true,
   },
   {
     num: "04",
     name: "Kontratlar",
-    desc: "Malik, kiracı, süre ve depozito bilgilerinden otomatik kira kontratı.",
-    v1: false,
+    desc: "Malik, kiracı, süre ve depozito bilgilerinden otomatik kira kontratı; imzalı kontrat yükleme.",
   },
   {
     num: "05",
     name: "Tahakkuklar",
     desc: "Kira tahakkuklarının otomatik oluşturulması ve cari hesaplara işlenmesi.",
-    v1: false,
   },
   {
     num: "06",
     name: "Tahsilatlar",
     desc: "Tahsilat kayıtlarının işlenmesi ve cari hesaplara otomatik kaydı.",
-    v1: false,
   },
   {
     num: "07",
     name: "Masraflar",
     desc: "Aidat, yatırım, sigorta, tadilat-bakım, boya ve diğer gider kalemleri.",
-    v1: false,
   },
   {
     num: "08",
     name: "Cari Hesaplar",
-    desc: "Malik, kiracı ve vekil bazında cari hesap tablosu ve dökümler.",
-    v1: false,
+    desc: "Malik, kiracı ve vekil bazında cari hesap tablosu; tahakkuk, masraf ve ödeme kayıtları.",
   },
 ];
 
@@ -115,8 +107,8 @@ export default function Landing() {
             <p className="mt-6 max-w-xl text-base leading-7 text-muted-foreground">
               Kira Takip, gayrimenkul portföyünüzü sade ve özenli bir panelde
               toplar. Her malik, her kiracı, her gayrimenkul bir kayıt; her
-              kayıt bir bakışta. Sürüm 1 gayrimenkuller ve kişilerle başlar;
-              kontrat ve cari hesaplara doğru büyür.
+              kontrat tahakkuklarını otomatik işler; her tahsilat ve masraf
+              cari hesaplara yansır.
             </p>
             <div className="mt-9 flex flex-wrap items-center gap-3">
               <Button asChild className="rounded-none px-6 py-3">
@@ -143,7 +135,7 @@ export default function Landing() {
           >
             {[
               ["08", "modül"],
-              ["03", "sürüm 1'de"],
+              ["03", "kişi türü"],
               ["7/24", "erişim"],
               ["01", "panel"],
             ].map(([value, label]) => (
@@ -158,7 +150,7 @@ export default function Landing() {
         {/* Hairline framing band */}
         <div className="mb-20 grid gap-px border border-border bg-border sm:grid-cols-3">
           {[
-            ["Sürüm 1 odağı", "Gayrimenkul ve kişiler — malik, vekil, kiracı, kefil."],
+            ["Kontrat & cari hesap", "Kontratlar tahakkukları otomatik işler; tahsilat ve masraflar cari hesaplara yansır."],
             ["Giriş güvenliği", "Her kullanıcı yalnızca yetkili olduğu gayrimenkulleri görür."],
             ["İlk yönetici", "Panel, profesyonel yönetici hesabıyla kurulur; yönetici kullanıcıları ekler."],
           ].map(([title, desc]) => (
@@ -194,15 +186,9 @@ export default function Landing() {
                 <span className="font-display text-sm text-muted-foreground">
                   {module.num}
                 </span>
-                {module.v1 ? (
-                  <span className="text-[10px] uppercase tracking-[0.16em] text-brand">
-                    Sürüm 1
-                  </span>
-                ) : (
-                  <span className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground/70">
-                    Sürüm 2
-                  </span>
-                )}
+                <span className="text-[10px] uppercase tracking-[0.16em] text-brand/70">
+                  Etkin
+                </span>
               </div>
               <h3 className="mt-6 font-display text-xl font-medium tracking-tight">
                 {module.name}
@@ -229,8 +215,8 @@ export default function Landing() {
             <div className="grid flex-1 gap-px border border-border bg-border sm:grid-cols-3">
               {[
                 ["01", "Giriş yapın", "Yönetici hesabı (Admin) ile panele girin, ilk kullanıcıları ekleyin."],
-                ["02", "Kişileri kaydedin", "Malikleri, vekilleri, kiracıları ve kefilleri tanımlayın."],
-                ["03", "Gayrimenkulleri ekleyin", "Her gayrimenkule malikini, teknik bilgilerini ve demirbaşlarını bağlayın."],
+                ["02", "Kişileri ve gayrimenkulleri kaydedin", "Malikleri, vekilleri, kiracıları, kefilleri ve portföydeki gayrimenkulleri tanımlayın."],
+                ["03", "Kontratı oluşturun", "Sözleşmeyi kurun; tahakkuklar otomatik işlenir, tahsilat ve masraflar cari hesaplara yansır."],
               ].map(([num, title, desc]) => (
                 <div key={num} className="bg-card p-6">
                   <span className="font-display text-sm text-muted-foreground">{num}</span>
@@ -274,7 +260,7 @@ export default function Landing() {
             </span>
           </div>
           <p className="text-xs text-muted-foreground">
-            © {new Date().getFullYear()} Kira Takip · Sürüm 1
+            © {new Date().getFullYear()} Kira Takip · Sürüm 2
           </p>
         </div>
       </footer>

@@ -1,15 +1,19 @@
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
 import { useAuth } from "@/hooks/use-auth";
-import { ComingSoonDialog } from "@/components/panel/ComingSoonDialog";
 import { KpiGrid, type KpiTile } from "@/components/panel/KpiGrid";
 import { OwnerSection } from "@/components/panel/OwnerSection";
 import { PropertySection } from "@/components/panel/PropertySection";
 import { TenantSection } from "@/components/panel/TenantSection";
+import { ContractSection } from "@/components/panel/ContractSection";
+import { AccrualSection } from "@/components/panel/AccrualSection";
+import { CollectionSection } from "@/components/panel/CollectionSection";
+import { ExpenseSection } from "@/components/panel/ExpenseSection";
+import { LedgerSection } from "@/components/panel/LedgerSection";
 import { UsersSection } from "@/components/panel/UsersSection";
 import { useQuery } from "convex/react";
 import { cn } from "@/lib/utils";
+import { formatCurrency } from "@/lib/export";
 import {
   Building2,
   LogOut,
@@ -31,20 +35,18 @@ type TabId =
   | "ledgers"
   | "users";
 
-const TABS: { id: TabId; num: number; label: string; v2?: boolean }[] = [
+const TABS: { id: TabId; num: number; label: string }[] = [
   { id: "properties", num: 1, label: "Gayrimenkuller" },
   { id: "owners", num: 2, label: "Malikler" },
   { id: "tenants", num: 3, label: "Kiracılar" },
-  { id: "contracts", num: 4, label: "Kontratlar", v2: true },
-  { id: "accruals", num: 5, label: "Tahakkuklar", v2: true },
-  { id: "collections", num: 6, label: "Tahsilatlar", v2: true },
-  { id: "expenses", num: 7, label: "Masraflar", v2: true },
-  { id: "ledgers", num: 8, label: "Cari Hesaplar", v2: true },
+  { id: "contracts", num: 4, label: "Kontratlar" },
+  { id: "accruals", num: 5, label: "Tahakkuklar" },
+  { id: "collections", num: 6, label: "Tahsilatlar" },
+  { id: "expenses", num: 7, label: "Masraflar" },
+  { id: "ledgers", num: 8, label: "Cari Hesaplar" },
 ];
 
 const VALID_TABS = new Set<string>(TABS.map((t) => t.id).concat("users"));
-
-const V2_TILE_IDS = ["contracts", "deposits", "pendingRents", "collectedRents"];
 
 export default function Panel() {
   const { user, signOut } = useAuth();
@@ -54,6 +56,9 @@ export default function Panel() {
   const properties = useQuery(api.properties.list);
   const owners = useQuery(api.owners.list);
   const tenants = useQuery(api.tenants.list);
+  const contracts = useQuery(api.contracts.list);
+  const accruals = useQuery(api.accruals.list);
+  const collections = useQuery(api.collections.list);
 
   const initialTab = searchParams.get("tab");
   const [activeTab, setActiveTabState] = useState<TabId>(
@@ -61,7 +66,6 @@ export default function Panel() {
       ? (initialTab as TabId)
       : "properties",
   );
-  const [comingSoon, setComingSoon] = useState<string | null>(null);
 
   const setActiveTab = (tab: TabId) => {
     setActiveTabState(tab);
@@ -73,6 +77,34 @@ export default function Panel() {
 
   const tiles: KpiTile[] = useMemo(() => {
     const count = (n: number | undefined) => n ?? 0;
+
+    const activeContracts = (contracts ?? []).filter(
+      (c) => c.status !== "ended",
+    );
+    const totalDeposits = (contracts ?? [])
+      .filter((c) => (c.depositStatus ?? "paid") !== "returned")
+      .reduce((sum, c) => sum + c.depositAmount, 0);
+
+    const paidPerAccrual = new Map<string, number>();
+    (collections ?? []).forEach((c) => {
+      if (!c.accrualId) return;
+      paidPerAccrual.set(
+        c.accrualId.toString(),
+        (paidPerAccrual.get(c.accrualId.toString()) ?? 0) + c.amount,
+      );
+    });
+    const pendingRent = (accruals ?? []).reduce((sum, a) => {
+      const paid = paidPerAccrual.get(a._id.toString()) ?? 0;
+      return sum + Math.max(0, a.amount - paid);
+    }, 0);
+    const collectedRent = (collections ?? []).reduce(
+      (sum, c) => sum + c.amount,
+      0,
+    );
+
+    const money = (value: number) =>
+      value === 0 ? "0 ₺" : formatCurrency(value);
+
     return [
       {
         id: "properties",
@@ -83,30 +115,26 @@ export default function Panel() {
       {
         id: "contracts",
         label: "Aktif Sözleşmeler",
-        value: "0",
-        caption: "Sürüm 2",
-        muted: true,
+        value: count(activeContracts.length),
+        caption: "yürürlükteki sözleşme",
       },
       {
         id: "deposits",
         label: "Depozitolar",
-        value: "—",
-        caption: "Sürüm 2",
-        muted: true,
+        value: money(totalDeposits),
+        caption: "elde tutulan depozito",
       },
       {
         id: "pendingRents",
         label: "Bekleyen Kiralar",
-        value: "—",
-        caption: "Sürüm 2",
-        muted: true,
+        value: money(pendingRent),
+        caption: "tahsil edilmeyi bekleyen",
       },
       {
         id: "collectedRents",
         label: "Tahsil Edilen Kiralar",
-        value: "—",
-        caption: "Sürüm 2",
-        muted: true,
+        value: money(collectedRent),
+        caption: "toplam tahsilat",
       },
       {
         id: "owners",
@@ -121,16 +149,20 @@ export default function Panel() {
         caption: "kiracı kaydı",
       },
     ];
-  }, [properties, owners, tenants]);
+  }, [properties, owners, tenants, contracts, accruals, collections]);
 
   const handleTileOpen = (id: string) => {
-    if (V2_TILE_IDS.includes(id)) {
-      setComingSoon(id);
-      return;
-    }
-    if (id === "owners" || id === "tenants" || id === "properties") {
-      setActiveTab(id as TabId);
-    }
+    const tabFor: Record<string, TabId> = {
+      properties: "properties",
+      contracts: "contracts",
+      deposits: "contracts",
+      pendingRents: "accruals",
+      collectedRents: "collections",
+      owners: "owners",
+      tenants: "tenants",
+    };
+    const tab = tabFor[id];
+    if (tab) setActiveTab(tab);
   };
 
   const handleSignOut = async () => {
@@ -255,39 +287,25 @@ export default function Panel() {
                 <button
                   key={tab.id}
                   type="button"
-                  onClick={() =>
-                    tab.v2 ? setComingSoon(tab.id) : setActiveTab(tab.id)
-                  }
+                  onClick={() => setActiveTab(tab.id)}
                   className={cn(
                     "group flex shrink-0 items-center gap-2 border-b-2 px-3 py-2.5 text-sm transition-colors",
-                    tab.v2
-                      ? "cursor-pointer border-transparent text-muted-foreground/70 hover:text-muted-foreground"
-                      : active
-                        ? "border-foreground text-foreground"
-                        : "border-transparent text-muted-foreground hover:border-foreground/30 hover:text-foreground",
+                    active
+                      ? "border-foreground text-foreground"
+                      : "border-transparent text-muted-foreground hover:border-foreground/30 hover:text-foreground",
                   )}
                 >
                   <span
                     className={cn(
                       "font-display text-xs",
-                      tab.v2
-                        ? "text-muted-foreground/50"
-                        : active
-                          ? "text-brand"
-                          : "text-muted-foreground/60 group-hover:text-foreground/70",
+                      active
+                        ? "text-brand"
+                        : "text-muted-foreground/60 group-hover:text-foreground/70",
                     )}
                   >
                     {String(tab.num).padStart(2, "0")}
                   </span>
                   {tab.label}
-                  {tab.v2 && (
-                    <Badge
-                      variant="outline"
-                      className="ml-0.5 rounded-full px-1.5 py-0 text-[9px] font-medium tracking-wide text-muted-foreground/60"
-                    >
-                      V2
-                    </Badge>
-                  )}
                 </button>
               );
             })}
@@ -297,6 +315,11 @@ export default function Panel() {
             {activeTab === "properties" && <PropertySection />}
             {activeTab === "owners" && <OwnerSection />}
             {activeTab === "tenants" && <TenantSection />}
+            {activeTab === "contracts" && <ContractSection />}
+            {activeTab === "accruals" && <AccrualSection />}
+            {activeTab === "collections" && <CollectionSection />}
+            {activeTab === "expenses" && <ExpenseSection />}
+            {activeTab === "ledgers" && <LedgerSection />}
             {activeTab === "users" && isAdmin && <UsersSection />}
             {activeTab === "users" && !isAdmin && <PropertySection />}
           </div>
@@ -304,19 +327,13 @@ export default function Panel() {
 
         {/* Footer */}
         <footer className="mt-16 flex flex-wrap items-center justify-between gap-2 border-t border-border py-6 text-xs text-muted-foreground">
-          <span>Kira Takip · Sürüm 1 — Gayrimenkul ve kişiler</span>
+          <span>Kira Takip · Sürüm 2 — Tüm modüller etkin</span>
           <span className="flex items-center gap-1.5">
             <Building2 className="h-3.5 w-3.5" />
             Gayrimenkul Yönetim Paneli
           </span>
         </footer>
       </main>
-
-      <ComingSoonDialog
-        moduleId={comingSoon ?? ""}
-        open={comingSoon !== null}
-        onOpenChange={(open) => !open && setComingSoon(null)}
-      />
     </div>
   );
 }

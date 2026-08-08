@@ -49,6 +49,57 @@ export const fixtureValidator = v.object({
 });
 export type Fixture = Infer<typeof fixtureValidator>;
 
+// Kontrat durumu — sözleşme aktif veya sona ermiş
+export const contractStatusValidator = v.union(
+  v.literal("active"),
+  v.literal("ended"),
+);
+export type ContractStatus = Infer<typeof contractStatusValidator>;
+
+// Depozito durumu — alındı / elde tutuluyor / iade edildi
+export const depositStatusValidator = v.union(
+  v.literal("paid"),
+  v.literal("held"),
+  v.literal("returned"),
+);
+export type DepositStatus = Infer<typeof depositStatusValidator>;
+
+// Tahakkuk durumu — bekliyor / kısmen ödendi / ödendi
+export const accrualStatusValidator = v.union(
+  v.literal("pending"),
+  v.literal("partial"),
+  v.literal("paid"),
+);
+export type AccrualStatus = Infer<typeof accrualStatusValidator>;
+
+// Masraf kalemleri — Aidat, Yatırım, Sigorta, Tadilat-Bakım/Onarım, Boya, Diğer
+export const expenseCategoryValidator = v.union(
+  v.literal("aidat"),
+  v.literal("yatirim"),
+  v.literal("sigorta"),
+  v.literal("tadilat"),
+  v.literal("boya"),
+  v.literal("diger"),
+);
+export type ExpenseCategory = Infer<typeof expenseCategoryValidator>;
+
+// Cari hesap sahibi türü — malik, kiracı veya vekil
+export const ledgerPersonTypeValidator = v.union(
+  v.literal("owner"),
+  v.literal("tenant"),
+  v.literal("proxy"),
+);
+export type LedgerPersonType = Infer<typeof ledgerPersonTypeValidator>;
+
+// Cari hesap kaydı türü
+export const ledgerKindValidator = v.union(
+  v.literal("accrual"),
+  v.literal("collection"),
+  v.literal("expense"),
+  v.literal("adjustment"),
+);
+export type LedgerKind = Infer<typeof ledgerKindValidator>;
+
 const schema = defineSchema(
   {
     // default auth tables using convex auth.
@@ -106,6 +157,89 @@ const schema = defineSchema(
       guarantor: guarantorValidator, // Kefil (nullable)
       createdBy: v.optional(v.id("users")),
     }),
+
+    // Kontratlar — rental contracts between owner, tenant and property
+    contracts: defineTable({
+      propertyId: v.id("properties"), // Gayrimenkul
+      ownerId: v.id("owners"), // Malik
+      tenantId: v.id("tenants"), // Kiracı
+      startDate: v.number(), // Başlangıç tarihi (ms)
+      durationMonths: v.number(), // Kira süresi (ay)
+      rentAmount: v.number(), // Aylık kira
+      depositAmount: v.number(), // Depozito
+      depositStatus: v.optional(depositStatusValidator), // Depozito durumu
+      fixtures: v.optional(v.array(fixtureValidator)), // Kontrat bazlı demirbaşlar
+      notes: v.optional(v.string()),
+      signedContractStorageId: v.optional(v.id("_storage")), // İmzalı kontrat
+      status: v.optional(contractStatusValidator), // aktif / sona erdi
+      createdBy: v.optional(v.id("users")),
+    })
+      .index("by_property", ["propertyId"])
+      .index("by_owner", ["ownerId"])
+      .index("by_tenant", ["tenantId"]),
+
+    // Tahakkuklar — monthly rent accruals
+    accruals: defineTable({
+      contractId: v.id("contracts"),
+      propertyId: v.id("properties"),
+      period: v.string(), // "2026-08" ay anahtarı
+      dueDate: v.number(),
+      amount: v.number(),
+      status: v.optional(accrualStatusValidator),
+      createdBy: v.optional(v.id("users")),
+    })
+      .index("by_contract", ["contractId"])
+      .index("by_property", ["propertyId"]),
+
+    // Tahsilatlar — rent collections
+    collections: defineTable({
+      contractId: v.id("contracts"),
+      propertyId: v.id("properties"),
+      accrualId: v.optional(v.id("accruals")),
+      amount: v.number(),
+      date: v.number(),
+      paidByType: v.optional(
+        v.union(v.literal("tenant"), v.literal("proxy")),
+      ),
+      tenantId: v.optional(v.id("tenants")), // paidByType = tenant
+      proxyOwnerId: v.optional(v.id("owners")), // paidByType = proxy
+      notes: v.optional(v.string()),
+      createdBy: v.optional(v.id("users")),
+    })
+      .index("by_contract", ["contractId"])
+      .index("by_property", ["propertyId"])
+      .index("by_accrual", ["accrualId"]),
+
+    // Masraflar — property expenses
+    expenses: defineTable({
+      propertyId: v.id("properties"),
+      contractId: v.optional(v.id("contracts")),
+      category: expenseCategoryValidator,
+      amount: v.number(),
+      date: v.number(),
+      paidByType: v.optional(ledgerPersonTypeValidator),
+      payerOwnerId: v.optional(v.id("owners")), // paidByType = owner / proxy
+      payerTenantId: v.optional(v.id("tenants")), // paidByType = tenant
+      description: v.string(),
+      createdBy: v.optional(v.id("users")),
+    }).index("by_property", ["propertyId"]),
+
+    // Cari hesaplar — per-person ledger entries
+    ledgerEntries: defineTable({
+      propertyId: v.optional(v.id("properties")),
+      contractId: v.optional(v.id("contracts")),
+      personType: ledgerPersonTypeValidator,
+      personId: v.union(v.id("owners"), v.id("tenants")),
+      ownerId: v.optional(v.id("owners")), // vekil satırları için malik
+      kind: ledgerKindValidator,
+      amount: v.number(), // pozitif = alacak, negatif = borç
+      description: v.string(),
+      date: v.number(),
+      referenceId: v.optional(v.string()),
+      createdBy: v.optional(v.id("users")),
+    })
+      .index("by_person", ["personType", "personId"])
+      .index("by_property", ["propertyId"]),
 
     // add other tables here
 
