@@ -250,7 +250,6 @@ export function LedgerSection() {
   return (
     <section className="space-y-6">
       <SectionToolbar
-        num="08"
         title="Cari Hesaplar"
         hint="Malik, kiracı ve vekil bazında cari hesap tablosu"
         count={accounts.length}

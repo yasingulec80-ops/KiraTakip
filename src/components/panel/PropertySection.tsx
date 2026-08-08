@@ -264,7 +264,6 @@ export function PropertySection() {
   return (
     <section className="space-y-6">
       <SectionToolbar
-        num="01"
         title="Gayrimenkuller"
         hint="Portföyünüzdeki tüm gayrimenkuller"
         count={filtered.length}

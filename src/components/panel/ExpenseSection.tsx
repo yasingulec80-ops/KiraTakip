@@ -226,7 +226,6 @@ export function ExpenseSection() {
   return (
     <section className="space-y-6">
       <SectionToolbar
-        num="07"
         title="Masraflar"
         hint="Aidat, yatırım, sigorta, tadilat, boya ve diğer giderler"
         count={filtered.length}

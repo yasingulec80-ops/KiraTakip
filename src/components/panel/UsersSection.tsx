@@ -177,7 +177,6 @@ export function UsersSection() {
   return (
     <section className="space-y-6">
       <SectionToolbar
-        num="09"
         title="Kullanıcılar"
         hint="Sistem kullanıcıları ve gayrimenkul yetkileri"
         count={filtered.length}

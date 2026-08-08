@@ -237,7 +237,6 @@ export function CollectionSection() {
   return (
     <section className="space-y-6">
       <SectionToolbar
-        num="06"
         title="Tahsilatlar"
         hint="İşlenen kira tahsilatları ve cari hesap kayıtları"
         count={filtered.length}

@@ -276,7 +276,6 @@ export function AccrualSection() {
   return (
     <section className="space-y-6">
       <SectionToolbar
-        num="05"
         title="Tahakkuklar"
         hint="Otomatik oluşturulan aylık kira tahakkukları"
         count={filtered.length}

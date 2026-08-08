@@ -309,7 +309,6 @@ export function ContractSection() {
   return (
     <section className="space-y-6">
       <SectionToolbar
-        num="04"
         title="Kontratlar"
         hint="Malik, kiracı ve gayrimenkul arasındaki sözleşmeler"
         count={filtered.length}

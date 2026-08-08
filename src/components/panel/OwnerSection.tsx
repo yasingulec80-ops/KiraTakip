@@ -206,7 +206,6 @@ export function OwnerSection() {
   return (
     <section className="space-y-6">
       <SectionToolbar
-        num="02"
         title="Malikler"
         hint="Mal sahipleri ve vekilleri"
         count={filtered.length}

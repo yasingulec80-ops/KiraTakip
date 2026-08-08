@@ -201,7 +201,6 @@ export function TenantSection() {
   return (
     <section className="space-y-6">
       <SectionToolbar
-        num="03"
         title="Kiracılar"
         hint="Kiracılar ve kefilleri"
         count={filtered.length}

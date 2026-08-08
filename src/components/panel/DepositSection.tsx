@@ -205,8 +205,6 @@ export function DepositSection() {
   return (
     <section className="space-y-6">
       <SectionToolbar
-        num=""
-        eyebrow="Genel Bakış"
         title="Depozitolar"
         hint="Sözleşme bazında depozito takibi ve iade işlemleri"
         count={filtered.length}
