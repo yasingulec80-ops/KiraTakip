@@ -27,7 +27,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { api } from "@/convex/_generated/api";
+import { api, internal } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { useAuth } from "@/hooks/use-auth";
 import {
@@ -39,8 +39,8 @@ import {
   parseNumber,
   printReport,
 } from "@/lib/export";
-import { useMutation, useQuery } from "convex/react";
-import { CalendarClock, Trash2 } from "lucide-react";
+import { useAction, useMutation, useQuery } from "convex/react";
+import { CalendarClock, Mail, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { DialogShell, Field, Row } from "./fields";
@@ -79,12 +79,14 @@ export function AccrualSection() {
   const tenants = useQuery(api.tenants.list);
   const createAccrual = useMutation(api.accruals.create);
   const removeAccrual = useMutation(api.accruals.remove);
+  const sendReminders = useAction(internal.reminders.sendRentReminders);
 
   const [search, setSearch] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [deleting, setDeleting] = useState<Accrual | null>(null);
+  const [sendingReminders, setSendingReminders] = useState(false);
 
   const contractMap = useMemo(() => {
     const map = new Map<string, Contract>();
@@ -229,6 +231,32 @@ export function AccrualSection() {
     }
   };
 
+  const handleSendReminders = async () => {
+    setSendingReminders(true);
+    try {
+      const result = await sendReminders({ daysBefore: 3 });
+      if (!result.configured) {
+        toast.error(
+          "E-posta servisi yapılandırılmadı — RESEND_API_KEY ekleyin.",
+        );
+      } else if (result.sent === 0 && result.failed === 0) {
+        toast.info(
+          "Gönderilecek hatırlatma bulunamadı: 3 gün içinde vadesi gelen ödenmemiş tahakkuk yok veya tümüne zaten gönderildi.",
+        );
+      } else if (result.failed > 0) {
+        toast.warning(
+          `${result.sent} hatırlatma gönderildi, ${result.failed} gönderilemedi.`,
+        );
+      } else {
+        toast.success(`${result.sent} hatırlatma e-postası gönderildi.`);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Gönderim başarısız.");
+    } finally {
+      setSendingReminders(false);
+    }
+  };
+
   return (
     <section className="space-y-6">
       <SectionToolbar
@@ -251,6 +279,20 @@ export function AccrualSection() {
         onExportPdf={exportPdf}
         addLabel="Tahakkuk Oluştur"
         onAdd={() => setFormOpen(true)}
+        extra={
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="rounded-none"
+            disabled={sendingReminders}
+            onClick={handleSendReminders}
+            aria-label="Vadesi yaklaşan kiralar için hatırlatma e-postası gönder"
+          >
+            <Mail className="mr-2 h-4 w-4" />
+            {sendingReminders ? "Gönderiliyor…" : "Kira Hatırlatması Gönder"}
+          </Button>
+        }
       />
 
       {accruals === undefined ? (

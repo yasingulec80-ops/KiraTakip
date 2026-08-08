@@ -8,6 +8,7 @@ import {
   Search,
   X,
 } from "lucide-react";
+import type { ReactNode } from "react";
 
 export interface SectionToolbarProps {
   num: string;
@@ -20,6 +21,7 @@ export interface SectionToolbarProps {
   search: string;
   onSearchChange: (value: string) => void;
   searchPlaceholder?: string;
+  extra?: ReactNode;
   from: string;
   to: string;
   onFromChange: (value: string) => void;
@@ -40,6 +42,7 @@ export function SectionToolbar({
   search,
   onSearchChange,
   searchPlaceholder,
+  extra,
   from,
   to,
   onFromChange,
@@ -139,6 +142,7 @@ export function SectionToolbar({
             <FileText className="mr-2 h-4 w-4" />
             PDF
           </Button>
+          {extra}
         </div>
       </div>
     </div>

@@ -227,6 +227,13 @@ const schema = defineSchema(
     }).index("by_property", ["propertyId"]),
 
     // Cari hesaplar — per-person ledger entries
+    // Kira hatırlatma e-postaları — gönderim kaydı (mükerrer gönderimi önler)
+    reminderLogs: defineTable({
+      accrualId: v.id("accruals"),
+      recipientEmail: v.string(),
+      sentAt: v.number(),
+    }).index("by_accrual", ["accrualId"]),
+
     ledgerEntries: defineTable({
       propertyId: v.optional(v.id("properties")),
       contractId: v.optional(v.id("contracts")),
