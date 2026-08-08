@@ -38,7 +38,7 @@ import {
   formatNumber,
   parseDateInput,
   parseNumber,
-  printDocument,
+  printHtmlDocument,
   printReport,
 } from "@/lib/export";
 import {
@@ -47,6 +47,7 @@ import {
   useQuery,
 } from "convex/react";
 import {
+  Eye,
   FileSignature,
   Plus,
   Printer,
@@ -182,6 +183,7 @@ export function ContractSection() {
   const [editing, setEditing] = useState<Contract | null>(null);
   const [viewing, setViewing] = useState<Contract | null>(null);
   const [deleting, setDeleting] = useState<Contract | null>(null);
+  const [preview, setPreview] = useState<ContractDocData | null>(null);
 
   const propertyMap = useMemo(() => {
     const map = new Map<string, Property>();
@@ -302,6 +304,20 @@ export function ContractSection() {
       }
       setFormOpen(false);
       setEditing(null);
+      // Kaydedilen kontrat resmi formatta önizleme olarak açılır.
+      setPreview({
+        propertyId: payload.propertyId,
+        ownerId: payload.ownerId,
+        tenantId: payload.tenantId,
+        startDate: payload.startDate,
+        durationMonths: payload.durationMonths,
+        rentAmount: payload.rentAmount,
+        depositAmount: payload.depositAmount,
+        depositMonths: payload.depositMonths,
+        depositStatus: payload.depositStatus,
+        fixtures: payload.fixtures,
+        notes: payload.notes,
+      });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "İşlem başarısız.");
     }
@@ -322,7 +338,7 @@ export function ContractSection() {
     const property = propertyMap.get(c.propertyId.toString());
     const owner = ownerMap.get(c.ownerId.toString());
     const tenant = tenantMap.get(c.tenantId.toString());
-    printDocument("Kira Kontratı", buildContractDocument(c, owner, tenant, property));
+    printHtmlDocument(buildContractHtml(c, owner, tenant, property));
     toast.success("Kontrat belgesi yazdırma için hazırlanıyor.");
   };
 
@@ -500,10 +516,32 @@ export function ContractSection() {
         property={viewing ? propertyMap.get(viewing.propertyId.toString()) : undefined}
         owner={viewing ? ownerMap.get(viewing.ownerId.toString()) : undefined}
         tenant={viewing ? tenantMap.get(viewing.tenantId.toString()) : undefined}
+        onPreview={viewing ? () => setPreview(viewing) : undefined}
         onPrint={viewing ? () => handlePrint(viewing) : undefined}
         onGenerate={viewing ? () => handleGenerate(viewing) : undefined}
         progress={
           viewing ? accrualCountByContract.get(viewing._id.toString()) : undefined
+        }
+      />
+
+      <ContractPreviewDialog
+        contract={preview}
+        onClose={() => setPreview(null)}
+        property={preview ? propertyMap.get(preview.propertyId.toString()) : undefined}
+        owner={preview ? ownerMap.get(preview.ownerId.toString()) : undefined}
+        tenant={preview ? tenantMap.get(preview.tenantId.toString()) : undefined}
+        onPrint={
+          preview
+            ? () =>
+                printHtmlDocument(
+                  buildContractHtml(
+                    preview,
+                    ownerMap.get(preview.ownerId.toString()),
+                    tenantMap.get(preview.tenantId.toString()),
+                    propertyMap.get(preview.propertyId.toString()),
+                  ),
+                )
+            : undefined
         }
       />
 
@@ -893,6 +931,7 @@ function ContractDetailDialog({
   tenant,
   progress,
   onClose,
+  onPreview,
   onPrint,
   onGenerate,
 }: {
@@ -902,6 +941,7 @@ function ContractDetailDialog({
   tenant?: Tenant;
   progress?: { total: number; paid: number };
   onClose: () => void;
+  onPreview?: () => void;
   onPrint?: () => void;
   onGenerate?: () => void;
 }) {
@@ -925,6 +965,17 @@ function ContractDetailDialog({
             >
               <RefreshCw className="mr-2 h-4 w-4" />
               Eksik Tahakkukları Oluştur
+            </Button>
+          )}
+          {onPreview && (
+            <Button
+              type="button"
+              variant="outline"
+              className="rounded-none"
+              onClick={onPreview}
+            >
+              <Eye className="mr-2 h-4 w-4" />
+              Önizle
             </Button>
           )}
           {onPrint && (
@@ -1170,9 +1221,107 @@ function SignedContractControl({ contract }: { contract: Contract }) {
 
 /* ------------------------------------------------------------------ */
 
-/** Build the printable rental contract body (editorial, clause-based). */
-function buildContractDocument(
-  contract: Contract,
+/** Kontrat önizleme / yazdırma belgesi için gereken alanlar. */
+type ContractDocData = Pick<
+  Contract,
+  | "propertyId"
+  | "ownerId"
+  | "tenantId"
+  | "startDate"
+  | "durationMonths"
+  | "rentAmount"
+  | "depositAmount"
+  | "depositMonths"
+  | "depositStatus"
+  | "fixtures"
+  | "notes"
+>;
+
+/** Resmi kontrat formatı stil tanımları (önizleme + yazdırma ortak). */
+const CONTRACT_STYLES = `
+  @page { size: A4 portrait; margin: 16mm 14mm; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Georgia", "Times New Roman", serif;
+    color: #2b2722;
+    font-size: 12.5px;
+    line-height: 1.75;
+    background: #ece8df;
+  }
+  @media print { body { background: #fff; } }
+  .page {
+    display: flex;
+    flex-direction: column;
+    min-height: 265mm;
+    width: 210mm;
+    margin: 0 auto;
+    padding: 14mm 12mm;
+    background: #fff;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.14);
+    page-break-after: always;
+    break-after: page;
+  }
+  .page:last-child { page-break-after: auto; break-after: auto; }
+  @media print {
+    .page {
+      width: auto;
+      margin: 0;
+      padding: 0;
+      box-shadow: none;
+    }
+  }
+  .content { flex: 1 1 auto; }
+  .doc-head {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 24px;
+    border-bottom: 1.5px solid #2b2722;
+    padding-bottom: 10px; margin-bottom: 20px;
+  }
+  .doc-head.running { border-bottom-color: #d8d1c4; margin-bottom: 16px; }
+  h1 { font-size: 19px; font-weight: 600; margin: 0; letter-spacing: 0.02em; }
+  .meta {
+    font-size: 9.5px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: #6b6358; text-align: right;
+  }
+  h2 { font-size: 12px; font-weight: 600; margin: 20px 0 8px; letter-spacing: 0.05em; }
+  .cont { font-weight: 400; text-transform: none; letter-spacing: 0; color: #6b6358; font-size: 11px; }
+  .clause { margin: 0 0 8px; text-align: justify; }
+  .closing { margin-top: 22px; }
+  .field-row {
+    display: flex; justify-content: space-between; gap: 24px;
+    border-bottom: 1px solid #e3ddd2; padding: 5px 0;
+  }
+  .field-label { color: #6b6358; font-size: 10.5px; letter-spacing: 0.05em; }
+  .field-row > span:last-child { text-align: right; }
+  .sig-date { margin-top: 20px; font-size: 12px; }
+  .signatures {
+    display: flex; justify-content: space-between; gap: 36px;
+    margin-top: 30px;
+  }
+  .signature { flex: 1; }
+  .signature .line { border-bottom: 1px solid #2b2722; height: 42px; }
+  .signature .name {
+    margin-top: 8px; font-size: 10px; letter-spacing: 0.08em;
+    text-transform: uppercase; color: #6b6358;
+  }
+  .signature .name span {
+    display: block; margin-top: 2px; font-size: 12px; font-weight: 600;
+    letter-spacing: 0; text-transform: none; color: #2b2722;
+  }
+  .page-foot {
+    margin-top: 14px; padding-top: 8px; border-top: 1px solid #e3ddd2;
+    font-size: 9.5px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: #6b6358; text-align: center;
+  }
+`;
+
+/**
+ * Build the full official-format rental contract as a standalone HTML document.
+ * The document is split into A4 pages; every page ends with signature areas
+ * (Kiracı / Malik / Vekil) whose names are filled in automatically.
+ */
+function buildContractHtml(
+  contract: ContractDocData,
   owner?: Owner,
   tenant?: Tenant,
   property?: Property,
@@ -1197,79 +1346,195 @@ function buildContractDocument(
   const fieldRow = (label: string, value: string) =>
     `<div class="field-row"><span class="field-label">${esc(label)}</span><span>${esc(value)}</span></div>`;
 
-  return `
-  <h2>KİRA KONTRATI</h2>
-  <p class="clause">İşbu kira kontratı, aşağıda kimlik bilgileri yer alan taraflar arasında, aşağıda yazılı koşullarla düzenlenmiştir.</p>
+  const TOTAL_PAGES = 3;
 
-  <h2>MADDE 1 — TARAFLAR</h2>
-  <div>
-    ${fieldRow("Kiracı", tenant?.name ?? "—")}
-    ${fieldRow("TC Kimlik No", tenant?.tcNo ?? "—")}
-    ${fieldRow("Telefon", tenant?.phone ?? "—")}
-    ${fieldRow("Adres", tenant?.address ?? "—")}
-    ${fieldRow("E-posta", tenant?.email ?? "—")}
-    ${fieldRow("Malik", owner?.name ?? "—")}
-    ${fieldRow("TC Kimlik No", owner?.tcNo ?? "—")}
-    ${fieldRow("Telefon", owner?.phone ?? "—")}
-    ${
-      owner?.proxy
-        ? fieldRow("Vekil", `${owner.proxy.name} (${owner.proxy.tcNo} · ${owner.proxy.phone})`)
-        : ""
-    }
-  </div>
+  /** Her sayfanın altına imza alanları — isimler otomatik doldurulur. */
+  const signatures = (page: number) => {
+    const sig = (role: string, name?: string) =>
+      `<div class="signature"><div class="line"></div><div class="name">${esc(role)}<span>${esc(name ?? "—")}</span></div></div>`;
+    return `<div class="signatures">${sig("Kiracı", tenant?.name)}${
+      owner?.proxy ? sig("Vekil", owner.proxy.name) : ""
+    }${sig("Malik", owner?.name)}</div>
+    <div class="page-foot">Sayfa ${page} / ${TOTAL_PAGES}</div>`;
+  };
 
-  <h2>MADDE 2 — KONU</h2>
-  <div>
-    ${fieldRow("Gayrimenkul", property?.name ?? "—")}
-    ${fieldRow("Adres", property?.address ?? "—")}
-    ${property?.m2 !== undefined ? fieldRow("Brüt Alan", `${formatNumber(property.m2)} m²`) : ""}
-    ${property?.roomCount ? fieldRow("Oda Sayısı", property.roomCount) : ""}
-  </div>
+  const runningHead =
+    '<div class="doc-head running"><span class="meta">Kira Kontratı</span><span class="meta">Kira Takip · Gayrimenkul Yönetim Paneli</span></div>';
 
-  <h2>MADDE 3 — SÜRE</h2>
-  <div>
-    ${fieldRow("Başlangıç Tarihi", start)}
-    ${fieldRow("Kira Süresi", `${contract.durationMonths} ay`)}
-    ${fieldRow("Bitiş Tarihi", end)}
-  </div>
+  const page1 = `
+    <div class="page">
+      <div class="content">
+        <div class="doc-head">
+          <h1>KİRA KONTRATI</h1>
+          <div class="meta">Kira Takip · Gayrimenkul Yönetim Paneli</div>
+        </div>
+        <p class="clause">İşbu kira kontratı, aşağıda kimlik bilgileri yer alan taraflar arasında, aşağıda yazılı koşullarla düzenlenmiştir.</p>
 
-  <h2>MADDE 4 — KİRA BEDELİ</h2>
-  <p class="clause">Kiracı, kira bedelini her ayın başında ödemekle yükümlüdür. Aylık kira bedeli ${esc(tl(contract.rentAmount))} olarak belirlenmiştir.</p>
+        <h2>MADDE 1 — TARAFLAR</h2>
+        <div>
+          ${fieldRow("Kiracı", tenant?.name ?? "—")}
+          ${fieldRow("TC Kimlik No", tenant?.tcNo ?? "—")}
+          ${fieldRow("Telefon", tenant?.phone ?? "—")}
+          ${fieldRow("Adres", tenant?.address ?? "—")}
+          ${fieldRow("E-posta", tenant?.email ?? "—")}
+          ${fieldRow("Malik", owner?.name ?? "—")}
+          ${fieldRow("TC Kimlik No", owner?.tcNo ?? "—")}
+          ${fieldRow("Telefon", owner?.phone ?? "—")}
+          ${
+            owner?.proxy
+              ? fieldRow("Vekil", `${owner.proxy.name} (${owner.proxy.tcNo} · ${owner.proxy.phone})`)
+              : ""
+          }
+        </div>
 
-  <h2>MADDE 5 — DEPOZİTO</h2>
-  <p class="clause">Depozito tutarı ${esc(tl(contract.depositAmount))} olup durumu: ${esc(depositStatus)}. ${
-    contract.depositMonths
-      ? `Depozito, ${esc(String(contract.depositMonths))} aylık kira bedeli karşılığıdır (aylık kira ${esc(tl(contract.rentAmount))} × ${esc(String(contract.depositMonths))} ay = ${esc(tl(contract.rentAmount * contract.depositMonths))}). `
-      : ""
-  }Depozito, kontrat sona erdiğinde ve gayrimenkulün boşaltılmış olduğu tespit edildiğinde iade edilir.</p>
+        <h2>MADDE 2 — KONU</h2>
+        <div>
+          ${fieldRow("Gayrimenkul", property?.name ?? "—")}
+          ${fieldRow("Adres", property?.address ?? "—")}
+          ${property?.m2 !== undefined ? fieldRow("Brüt Alan", `${formatNumber(property.m2)} m²`) : ""}
+          ${property?.roomCount ? fieldRow("Oda Sayısı", property.roomCount) : ""}
+        </div>
 
-  <h2>MADDE 6 — DEMİRBAŞLAR</h2>
-  <p class="clause">${esc(fixtureList)}</p>
+        <h2>MADDE 3 — SÜRE</h2>
+        <div>
+          ${fieldRow("Başlangıç Tarihi", start)}
+          ${fieldRow("Kira Süresi", `${contract.durationMonths} ay`)}
+          ${fieldRow("Bitiş Tarihi", end)}
+        </div>
 
-  <h2>MADDE 7 — GENEL KOŞULLAR</h2>
-  ${GENERAL_CONDITIONS.map(
-    (c, i) => `<p class="clause">${i + 1}. ${esc(c)}</p>`,
-  ).join("\n  ")}
+        <h2>MADDE 4 — KİRA BEDELİ</h2>
+        <p class="clause">Kiracı, kira bedelini her ayın başında ödemekle yükümlüdür. Aylık kira bedeli ${esc(tl(contract.rentAmount))} olarak belirlenmiştir.</p>
+      </div>
+      ${signatures(1)}
+    </div>`;
 
-  ${
-    contract.notes
-      ? `<h2>MADDE 8 — ÖZEL HÜKÜMLER</h2><p class="clause">${esc(contract.notes)}</p>`
-      : ""
-  }
+  const page2 = `
+    <div class="page">
+      <div class="content">
+        ${runningHead}
 
-  <div class="signatures">
-    <div class="signature">
-      <div class="line"></div>
-      <div class="name">Kiracı — ${esc(tenant?.name ?? "")}</div>
-    </div>
-    ${
-      owner?.proxy
-        ? `<div class="signature"><div class="line"></div><div class="name">Vekil — ${esc(owner.proxy.name)}</div></div>`
-        : ""
-    }
-    <div class="signature">
-      <div class="line"></div>
-      <div class="name">Malik — ${esc(owner?.name ?? "")}</div>
-    </div>
-  </div>`;
+        <h2>MADDE 5 — DEPOZİTO</h2>
+        <p class="clause">Depozito tutarı ${esc(tl(contract.depositAmount))} olup durumu: ${esc(depositStatus)}. ${
+          contract.depositMonths
+            ? `Depozito, ${esc(String(contract.depositMonths))} aylık kira bedeli karşılığıdır (aylık kira ${esc(tl(contract.rentAmount))} × ${esc(String(contract.depositMonths))} ay = ${esc(tl(contract.rentAmount * contract.depositMonths))}). `
+            : ""
+        }Depozito, kontrat sona erdiğinde ve gayrimenkulün boşaltılmış olduğu tespit edildiğinde iade edilir.</p>
+
+        <h2>MADDE 6 — DEMİRBAŞLAR</h2>
+        <p class="clause">${esc(fixtureList)}</p>
+
+        <h2>MADDE 7 — GENEL KOŞULLAR</h2>
+        ${GENERAL_CONDITIONS.slice(0, 9)
+          .map((c, i) => `<p class="clause">${i + 1}. ${esc(c)}</p>`)
+          .join("\n        ")}
+      </div>
+      ${signatures(2)}
+    </div>`;
+
+  const page3 = `
+    <div class="page">
+      <div class="content">
+        ${runningHead}
+
+        <h2>MADDE 7 — GENEL KOŞULLAR <span class="cont">(devamı)</span></h2>
+        ${GENERAL_CONDITIONS.slice(9)
+          .map((c, i) => `<p class="clause">${i + 10}. ${esc(c)}</p>`)
+          .join("\n        ")}
+
+        ${
+          contract.notes
+            ? `<h2>MADDE 8 — ÖZEL HÜKÜMLER</h2><p class="clause">${esc(contract.notes)}</p>`
+            : ""
+        }
+
+        <p class="clause closing">İşbu kira kontratı, taraflarca okunarak anlaşılmış ve aşağıda imza altına alınmıştır. Taraflardan her biri, sözleşme metninin birer örneğini teslim almıştır.</p>
+        <div class="sig-date">Tarih: ${esc(formatDate(Date.now()))}</div>
+      </div>
+      ${signatures(3)}
+    </div>`;
+
+  return `<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8" />
+<title>Kira Kontratı</title>
+<style>${CONTRACT_STYLES}</style>
+</head>
+<body>
+${page1}
+${page2}
+${page3}
+</body>
+</html>`;
+}
+
+/* ------------------------------------------------------------------ */
+
+/** Resmi format önizleme penceresi (her sayfada imza alanları). */
+function ContractPreviewDialog({
+  contract,
+  property,
+  owner,
+  tenant,
+  onClose,
+  onPrint,
+}: {
+  contract: ContractDocData | null;
+  property?: Property;
+  owner?: Owner;
+  tenant?: Tenant;
+  onClose: () => void;
+  onPrint?: () => void;
+}) {
+  const html = useMemo(
+    () => (contract ? buildContractHtml(contract, owner, tenant, property) : ""),
+    [contract, property, owner, tenant],
+  );
+
+  return (
+    <DialogShell
+      open={contract !== null}
+      onOpenChange={(open) => !open && onClose()}
+      title="Kontrat Önizleme"
+      description="Resmi kontrat formatı — her sayfada imza alanları, isimler otomatik doldurulur"
+      xwide
+      footer={
+        <>
+          {onPrint && (
+            <Button
+              type="button"
+              variant="outline"
+              className="rounded-none"
+              onClick={onPrint}
+            >
+              <Printer className="mr-2 h-4 w-4" />
+              Yazdır / PDF İndir
+            </Button>
+          )}
+          <div className="flex-1" />
+          <Button
+            type="button"
+            variant="ghost"
+            className="rounded-none"
+            onClick={onClose}
+          >
+            Kapat
+          </Button>
+        </>
+      }
+    >
+      {html ? (
+        <iframe
+          title="Kontrat önizleme"
+          srcDoc={html}
+          className="block w-full border border-border bg-[#ece8df]"
+          style={{ height: "72vh" }}
+        />
+      ) : (
+        <p className="py-16 text-center text-sm text-muted-foreground">
+          Yükleniyor…
+        </p>
+      )}
+    </DialogShell>
+  );
 }

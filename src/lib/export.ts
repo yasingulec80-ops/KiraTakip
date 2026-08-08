@@ -169,52 +169,10 @@ export function printReport(
 }
 
 /**
- * Print an arbitrary document (e.g. an auto-generated rental contract) via
- * a hidden iframe with the provided HTML body.
+ * Print a fully-formed HTML document (one that already contains its own
+ * <html> shell and styles, e.g. the official rental contract preview).
  */
-export function printDocument(title: string, bodyHtml: string) {
-  const html = `<!doctype html>
-<html lang="tr">
-<head>
-<meta charset="utf-8" />
-<title>${title}</title>
-<style>
-  @page { margin: 20mm 18mm; }
-  * { box-sizing: border-box; }
-  body {
-    font-family: "Georgia", "Times New Roman", serif;
-    color: #2b2722;
-    margin: 0;
-    padding: 32px;
-    font-size: 13px;
-    line-height: 1.7;
-  }
-  .doc-head {
-    display: flex; align-items: baseline; justify-content: space-between;
-    border-bottom: 1.5px solid #2b2722;
-    padding-bottom: 12px; margin-bottom: 28px;
-  }
-  h1 { font-size: 20px; font-weight: 600; margin: 0; letter-spacing: 0.01em; }
-  .meta { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: #6b6358; }
-  h2 { font-size: 13px; font-weight: 600; margin: 26px 0 8px; letter-spacing: 0.04em; }
-  .clause { margin: 0 0 10px; text-align: justify; }
-  .field-row { display: flex; justify-content: space-between; border-bottom: 1px solid #e3ddd2; padding: 5px 0; }
-  .field-label { color: #6b6358; font-size: 11px; letter-spacing: 0.06em; }
-  .signatures { display: flex; justify-content: space-between; margin-top: 56px; gap: 40px; }
-  .signature { flex: 1; }
-  .signature .line { border-bottom: 1px solid #2b2722; height: 44px; }
-  .signature .name { margin-top: 8px; font-size: 11px; color: #6b6358; }
-</style>
-</head>
-<body>
-  <div class="doc-head">
-    <h1>${title}</h1>
-    <div class="meta">Kira Takip · Gayrimenkul Yönetim Paneli</div>
-  </div>
-  ${bodyHtml}
-</body>
-</html>`;
-
+export function printHtmlDocument(html: string) {
   const iframe = document.createElement("iframe");
   iframe.setAttribute("aria-hidden", "true");
   iframe.style.position = "fixed";
