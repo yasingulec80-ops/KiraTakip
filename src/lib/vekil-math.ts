@@ -137,3 +137,19 @@ export const devirablesFor = (
     deposit: Math.max(0, t.collectedDeposit - t.depositTransfer),
   };
 };
+
+export type DevirTransferType = "rent" | "deposit";
+
+/**
+ * Devir tipi için sunucu limiti — `devir` mutation'ının kullandığı hesap.
+ * Alacak, yalnızca kira tarafından mahsup edilir; depozito limiti alacaktan
+ * etkilenmez. Raporlardaki net "teslim bekleyen" formülüyle birebir aynıdır.
+ */
+export const devirAvailableOf = (
+  entries: LedgerEntryLike[],
+  personId: string,
+  transferType: DevirTransferType,
+): number => {
+  const d = devirablesFor(entries, personId);
+  return transferType === "deposit" ? d.deposit : d.rent;
+};

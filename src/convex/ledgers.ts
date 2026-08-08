@@ -16,7 +16,7 @@ import {
 } from "./ledger_ops";
 import { ledgerKindValidator, ledgerPersonTypeValidator } from "./schema";
 import { refreshAccrualStatus } from "./accruals";
-import { devirablesFor } from "../lib/vekil-math";
+import { devirAvailableOf } from "../lib/vekil-math";
 
 /** List ledger entries the user may see (property access). */
 export const list = query({
@@ -232,9 +232,11 @@ export const devir = mutation({
         q.eq("personType", "proxy").eq("personId", args.ownerId),
       )
       .collect();
-    const devirables = devirablesFor(entries, args.ownerId.toString());
-    const available =
-      transferType === "deposit" ? devirables.deposit : devirables.rent;
+    const available = devirAvailableOf(
+      entries,
+      args.ownerId.toString(),
+      transferType,
+    );
     if (args.amount > available) {
       throw new ConvexError(
         `Teslim edilebilir ${transferType === "deposit" ? "depozito" : "kira"} tutarı ${available.toLocaleString("tr-TR")} ₺ ile sınırlıdır.`,
