@@ -88,7 +88,17 @@ const entryKindLabel = (e: LedgerEntry): string =>
 
 const TODAY = dateToInput(Date.now());
 
-const SUMMARY_HEADERS = ["Tür", "Kişi", "Borç", "Alacak", "Bakiye"];
+const SUMMARY_HEADERS = [
+  "Tür",
+  "Kişi",
+  "Tahsil Edilen Kira",
+  "Tahsil Edilen Depozito",
+  "Kira Devri",
+  "Depozito Devri",
+  "Borç",
+  "Alacak",
+  "Bakiye",
+];
 const ENTRY_HEADERS = ["Tarih", "Tür", "Açıklama", "Tutar"];
 
 export function LedgerSection() {
@@ -220,6 +230,43 @@ export function LedgerSection() {
     return d.rent + d.deposit;
   };
 
+  /** Özet dökümü için hesabın tahsilat ve devir toplamları (kira / depozito ayrı). */
+  const summaryTotalsOf = (
+    account: PersonAccount,
+  ): {
+    collectedRent: number;
+    collectedDeposit: number;
+    rentTransfer: number;
+    depositTransfer: number;
+  } => {
+    const totals = {
+      collectedRent: 0,
+      collectedDeposit: 0,
+      rentTransfer: 0,
+      depositTransfer: 0,
+    };
+    rangeFilteredEntries
+      .filter(
+        (e) =>
+          e.personType === account.personType &&
+          e.personId.toString() === account.personId,
+      )
+      .forEach((e) => {
+        const isDeposit = e.description.includes("depozito");
+        if (
+          e.kind === "collection" &&
+          e.description.startsWith("Vekil tahsilatı")
+        ) {
+          if (isDeposit) totals.collectedDeposit += Math.abs(e.amount);
+          else totals.collectedRent += Math.abs(e.amount);
+        } else if (e.kind === "transfer") {
+          if (isDeposit) totals.depositTransfer += e.amount;
+          else totals.rentTransfer += e.amount;
+        }
+      });
+    return totals;
+  };
+
   const entryRows = (account: PersonAccount): (string | number | null)[][] =>
     entriesOf(account).map((e) => [
       formatDate(e.date),
@@ -228,18 +275,23 @@ export function LedgerSection() {
       e.amount,
     ]);
 
+  const summaryRows = accounts.map((a) => {
+    const t = summaryTotalsOf(a);
+    return [
+      PERSON_TYPE_LABEL[a.personType],
+      a.name,
+      t.collectedRent,
+      t.collectedDeposit,
+      t.rentTransfer,
+      t.depositTransfer,
+      a.balance < 0 ? -a.balance : 0,
+      a.balance > 0 ? a.balance : 0,
+      a.balance,
+    ];
+  });
+
   const exportSummaryCsv = () => {
-    downloadCsv(
-      "cari-hesap-ozeti",
-      SUMMARY_HEADERS,
-      accounts.map((a) => [
-        PERSON_TYPE_LABEL[a.personType],
-        a.name,
-        a.balance < 0 ? -a.balance : 0,
-        a.balance > 0 ? a.balance : 0,
-        a.balance,
-      ]),
-    );
+    downloadCsv("cari-hesap-ozeti", SUMMARY_HEADERS, summaryRows);
     toast.success("Excel dökümü indirildi.");
   };
 
@@ -248,13 +300,7 @@ export function LedgerSection() {
       "Cari Hesap Özeti",
       "Malik, kiracı ve vekil bakiyeleri",
       SUMMARY_HEADERS,
-      accounts.map((a) => [
-        PERSON_TYPE_LABEL[a.personType],
-        a.name,
-        a.balance < 0 ? -a.balance : 0,
-        a.balance > 0 ? a.balance : 0,
-        a.balance,
-      ]),
+      summaryRows,
     );
     toast.success("PDF dökümü hazırlanıyor.");
   };
