@@ -1638,7 +1638,7 @@ function buildContractHtml(
       ${kefil ? sig("Kefil", kefil.name) : ""}
       ${
         owner?.proxy
-          ? sig("Kiraya Veren Adına Vekaleten", owner.proxy.name, owner.name)
+          ? sig(`Kiraya Veren ${owner.name} Adına Vekaleten`, owner.proxy.name)
           : sig("Kiraya Veren", owner?.name)
       }
     </div>
@@ -1669,7 +1669,7 @@ function buildContractHtml(
           ${fieldRow("Telefon", owner?.phone ?? "—")}
           ${
             owner?.proxy
-              ? fieldRow("Vekil (Adına Vekaleten)", `${owner.proxy.name} (${owner.proxy.tcNo} · ${owner.proxy.phone})`)
+              ? fieldRow(`Vekil — Kiraya Veren ${owner.name} Adına Vekaleten`, `${owner.proxy.name} (${owner.proxy.tcNo} · ${owner.proxy.phone})`)
               : ""
           }
           ${
