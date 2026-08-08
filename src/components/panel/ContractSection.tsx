@@ -1743,11 +1743,6 @@ function buildContractHtml(
       </div>
       <div class="signatures">
         <div class="signature"><div class="line"></div><div class="name">Kiracı<span>${esc(tenant?.name ?? "—")}</span></div></div>
-        ${
-          owner?.proxy
-            ? `<div class="signature"><div class="line"></div><div class="name">Kiraya Veren Adına Vekaleten<span>${esc(owner.proxy.name)}</span><span class="sub">${esc(owner.name)}</span></div></div>`
-            : `<div class="signature"><div class="line"></div><div class="name">Kiraya Veren<span>${esc(owner?.name ?? "—")}</span></div></div>`
-        }
       </div>
       <div class="page-foot">Sayfa ${TOTAL_PAGES} / ${TOTAL_PAGES}</div>
     </div>`
