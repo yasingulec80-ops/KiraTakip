@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import {
   Table,
@@ -8,12 +9,19 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { api } from "@/convex/_generated/api";
-import type { Doc } from "@/convex/_generated/dataModel";
-import { downloadCsv, formatCurrency, formatDate, printReport } from "@/lib/export";
-import { useQuery } from "convex/react";
+import type { Doc, Id } from "@/convex/_generated/dataModel";
+import {
+  downloadCsv,
+  formatCurrency,
+  formatDate,
+  parseDateInput,
+  printReport,
+} from "@/lib/export";
+import { useMutation, useQuery } from "convex/react";
 import { BarChart3 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import { DevirDialog } from "./DevirDialog";
 import { SectionToolbar } from "./SectionToolbar";
 
 type LedgerEntry = Doc<"ledgerEntries">;
@@ -82,6 +90,76 @@ export function VekilDevirReport() {
   const [search, setSearch] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+
+  const devir = useMutation(api.ledgers.devir);
+  const [deviring, setDeviring] = useState<{
+    ownerId: string;
+    name: string;
+    subtitle: string;
+  } | null>(null);
+
+  /** Vekilin tahsil edip henüz devretmediği tutarlar (kira / depozito ayrı). */
+  const devirablesFor = (
+    ownerId: string,
+  ): { rent: number; deposit: number } =>
+    (entries ?? [])
+      .filter(
+        (e) => e.personType === "proxy" && e.personId.toString() === ownerId,
+      )
+      .reduce(
+        (acc, e) => {
+          const isDeposit = e.description.includes("depozito");
+          if (
+            e.kind === "collection" &&
+            e.description.startsWith("Vekil tahsilatı")
+          ) {
+            acc[isDeposit ? "deposit" : "rent"] += Math.abs(e.amount);
+          } else if (e.kind === "transfer") {
+            acc[isDeposit ? "deposit" : "rent"] -= e.amount;
+          }
+          return acc;
+        },
+        { rent: 0, deposit: 0 },
+      );
+
+  const openDevir = (ownerId: string, ownerName: string, vekilName: string) => {
+    setDeviring({
+      ownerId,
+      name: vekilName,
+      subtitle: `Vekil · ${ownerName}`,
+    });
+  };
+
+  const handleDevir = async (
+    amount: number,
+    date: string,
+    note: string,
+    transferType: "rent" | "deposit",
+  ) => {
+    if (!deviring) return;
+    const parsedDate = parseDateInput(date);
+    if (!parsedDate) {
+      toast.error("Devir tarihi zorunludur.");
+      return;
+    }
+    try {
+      await devir({
+        ownerId: deviring.ownerId as Id<"owners">,
+        amount,
+        date: parsedDate,
+        note: note.trim() || undefined,
+        transferType,
+      });
+      toast.success(
+        transferType === "deposit"
+          ? "Depozito devri işlendi; vekilin cari hesabındaki borç kapatıldı."
+          : "Kira devri işlendi; vekilin cari hesabındaki borç kapatıldı.",
+      );
+      setDeviring(null);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "İşlem başarısız.");
+    }
+  };
 
   const rangeFiltered = useMemo(() => {
     const fromMs = from ? new Date(`${from}T00:00:00`).getTime() : null;
@@ -429,11 +507,19 @@ export function VekilDevirReport() {
                             ? formatCurrency(r.depositTransfer)
                             : "—"}
                         </TableCell>
-                        <TableCell className="text-right font-medium tabular-nums">
+                        <TableCell className="text-right tabular-nums">
                           {remaining > 0 ? (
-                            <span className="text-amber-700">
+                            <Button
+                              type="button"
+                              variant="link"
+                              className="h-auto rounded-none p-0 font-medium text-amber-700 underline-offset-4 hover:underline"
+                              onClick={() =>
+                                openDevir(r.ownerId, r.ownerName, r.vekilName)
+                              }
+                              title="Devir penceresini aç"
+                            >
                               {formatCurrency(remaining)}
-                            </span>
+                            </Button>
                           ) : (
                             <span className="text-muted-foreground">—</span>
                           )}
@@ -563,6 +649,25 @@ export function VekilDevirReport() {
           </div>
         </div>
       )}
+      <DevirDialog
+        open={deviring !== null}
+        account={
+          deviring
+            ? {
+                key: `report:${deviring.ownerId}`,
+                name: deviring.name,
+                subtitle: deviring.subtitle,
+                ownerId: deviring.ownerId,
+              }
+            : null
+        }
+        devirableRent={deviring ? devirablesFor(deviring.ownerId).rent : 0}
+        devirableDeposit={
+          deviring ? devirablesFor(deviring.ownerId).deposit : 0
+        }
+        onOpenChange={(open) => !open && setDeviring(null)}
+        onDevir={handleDevir}
+      />
     </section>
   );
 }
