@@ -5,6 +5,7 @@ import {
   createAccrualWithLedger,
   createCollectionWithLedger,
   createExpenseWithLedger,
+  periodKey,
 } from "./ledger_ops";
 import { refreshAccrualStatus } from "./accruals";
 
@@ -115,7 +116,6 @@ export const seedDemoData = mutation({
       durationMonths: 12,
       rentAmount,
       depositAmount: 55500,
-      depositStatus: "paid",
       fixtures: [
         { name: "Buzdolabı", quantity: 1 },
         { name: "Çamaşır Makinesi", quantity: 1 },
@@ -132,6 +132,16 @@ export const seedDemoData = mutation({
     for (const month of contractMonths(contract)) {
       await createAccrualWithLedger(ctx, actor, contract, month);
     }
+
+    // Depozito tahakkuku — kontrat kaydedildiğinde otomatik oluşturulur.
+    await createAccrualWithLedger(
+      ctx,
+      actor,
+      contract,
+      { period: periodKey(contract.startDate), dueDate: contract.startDate },
+      contract.depositAmount,
+      "deposit",
+    );
 
     /* ---------------------- Tahsilat (Ağustos kirası) ------------------ */
     const accruals = await ctx.db

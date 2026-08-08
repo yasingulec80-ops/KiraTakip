@@ -73,6 +73,13 @@ export const accrualStatusValidator = v.union(
 );
 export type AccrualStatus = Infer<typeof accrualStatusValidator>;
 
+// Tahakkuk türü — aylık kira veya kontrat başlangıcında otomatik depozito tahakkuku
+export const accrualTypeValidator = v.union(
+  v.literal("rent"),
+  v.literal("deposit"),
+);
+export type AccrualType = Infer<typeof accrualTypeValidator>;
+
 // Masraf kalemleri — Aidat, Yatırım, Sigorta, Tadilat-Bakım/Onarım, Boya, Diğer
 export const expenseCategoryValidator = v.union(
   v.literal("aidat"),
@@ -171,7 +178,7 @@ const schema = defineSchema(
       rentAmount: v.number(), // Aylık kira
       depositAmount: v.number(), // Depozito
       depositMonths: v.optional(v.number()), // Depozito kaç aylık kira karşılığı
-      depositStatus: v.optional(depositStatusValidator), // Depozito durumu
+      depositStatus: v.optional(depositStatusValidator), // Yalnızca iade takibi (Depozitolar modülü)
       depositReturnedAt: v.optional(v.number()), // İade tarihi (ms)
       depositNote: v.optional(v.string()), // İade notu
       guarantor: v.optional(guarantorValidator), // Kefil (kontrat bazlı)
@@ -195,6 +202,7 @@ const schema = defineSchema(
       period: v.string(), // "2026-08" ay anahtarı
       dueDate: v.number(),
       amount: v.number(),
+      type: v.optional(accrualTypeValidator), // "rent" (aylık kira) | "deposit" (depozito)
       status: v.optional(accrualStatusValidator),
       createdBy: v.optional(v.id("users")),
     })

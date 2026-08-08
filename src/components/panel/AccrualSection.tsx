@@ -120,13 +120,17 @@ export function AccrualSection() {
     return map;
   }, [collections]);
 
+  // Depozito tahakkukları aylık kira modülünde yer almaz; yalnızca
+  // Depozitolar ve Cari Hesaplar üzerinden izlenir.
   const enriched = useMemo(
     () =>
-      (accruals ?? []).map((a) => ({
-        ...a,
-        paid: paidByAccrual.get(a._id.toString()) ?? 0,
-        remaining: Math.max(0, a.amount - (paidByAccrual.get(a._id.toString()) ?? 0)),
-      })),
+      (accruals ?? [])
+        .filter((a) => (a.type ?? "rent") !== "deposit")
+        .map((a) => ({
+          ...a,
+          paid: paidByAccrual.get(a._id.toString()) ?? 0,
+          remaining: Math.max(0, a.amount - (paidByAccrual.get(a._id.toString()) ?? 0)),
+        })),
     [accruals, paidByAccrual],
   );
 

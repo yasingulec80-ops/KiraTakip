@@ -100,7 +100,7 @@ export default function Panel() {
       (c) => c.status !== "ended",
     );
     const totalDeposits = (contracts ?? [])
-      .filter((c) => (c.depositStatus ?? "paid") !== "returned")
+      .filter((c) => !c.depositReturnedAt)
       .reduce((sum, c) => sum + c.depositAmount, 0);
 
     const paidPerAccrual = new Map<string, number>();
@@ -123,11 +123,13 @@ export default function Panel() {
       59,
       999,
     ).getTime();
-    const pendingRent = (accruals ?? []).reduce((sum, a) => {
-      if (a.dueDate > monthEnd) return sum;
-      const paid = paidPerAccrual.get(a._id.toString()) ?? 0;
-      return sum + Math.max(0, a.amount - paid);
-    }, 0);
+    const pendingRent = (accruals ?? [])
+      .filter((a) => (a.type ?? "rent") !== "deposit") // depozito tahakkuku kira alacağı değildir
+      .reduce((sum, a) => {
+        if (a.dueDate > monthEnd) return sum;
+        const paid = paidPerAccrual.get(a._id.toString()) ?? 0;
+        return sum + Math.max(0, a.amount - paid);
+      }, 0);
     const collectedRent = (collections ?? [])
       .filter((c) => (c.collectionType ?? "rent") === "rent")
       .reduce((sum, c) => sum + c.amount, 0);
@@ -500,7 +502,11 @@ function OverviewDetailDialog({
           />
         )}
         {tileId === "deposits" && (
-          <DepositDetailList contracts={contracts} propertyMap={propertyMap} />
+          <DepositDetailList
+            contracts={contracts}
+            collections={collections}
+            propertyMap={propertyMap}
+          />
         )}
         {tileId === "pendingRents" && (
           <PendingRentDetailList
@@ -627,24 +633,52 @@ function ContractDetailList({
 
 const DEPOSIT_STATUS_LABEL: Record<string, string> = {
   pending: "Ödeme Bekliyor",
-  paid: "Ödendi",
+  paid: "Tahsil Edildi",
   held: "Elde Tutuluyor",
   returned: "İade Edildi",
 };
 
+/**
+ * Depozito durumu kontrat üzerinden seçilmez; tahakkuk ve tahsilatlardan
+ * türetilir: iade edildi → tahsil edildi (depozito tahsilatı tutarı
+ * karşılıyor) → ödeme bekliyor.
+ */
+const depositStatusOf = (
+  contract: Doc<"contracts">,
+  collectedByContract: Map<string, number>,
+): string => {
+  if (contract.depositReturnedAt || contract.depositStatus === "returned") {
+    return "returned";
+  }
+  const collected = collectedByContract.get(contract._id.toString()) ?? 0;
+  if (collected >= (contract.depositAmount ?? 0)) return "paid";
+  return "pending";
+};
+
 function DepositDetailList({
   contracts,
+  collections,
   propertyMap,
 }: {
   contracts: Doc<"contracts">[];
+  collections: Doc<"collections">[];
   propertyMap: Map<string, Doc<"properties">>;
 }) {
+  const collectedByContract = useMemo(() => {
+    const map = new Map<string, number>();
+    collections.forEach((c) => {
+      if ((c.collectionType ?? "rent") !== "deposit") return;
+      const key = c.contractId.toString();
+      map.set(key, (map.get(key) ?? 0) + c.amount);
+    });
+    return map;
+  }, [collections]);
   const total = contracts.reduce((s, c) => s + c.depositAmount, 0);
   return (
     <div>
       <DetailTable headers={["Gayrimenkul", "Depozito", "Durum"]}>
         {contracts.map((c) => {
-          const status = c.depositStatus ?? "paid";
+          const status = depositStatusOf(c, collectedByContract);
           return (
             <TableRow key={c._id}>
               <TableCell className="font-medium">
@@ -726,6 +760,7 @@ function PendingRentDetailList({
         999,
       ).getTime();
       const allRows = accruals
+        .filter((a) => (a.type ?? "rent") !== "deposit") // depozito tahakkuku bu görünümde yer almaz
         .map((a) => {
           const paid = paidByAccrual.get(a._id.toString()) ?? 0;
           return {

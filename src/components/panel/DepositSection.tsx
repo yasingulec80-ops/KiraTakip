@@ -44,9 +44,27 @@ const TODAY = dateToInput(Date.now());
 
 const DEPOSIT_STATUS_LABEL: Record<string, string> = {
   pending: "Ödeme bekliyor",
-  paid: "Ödendi",
+  paid: "Tahsil edildi",
   held: "Elde tutuluyor",
   returned: "İade edildi",
+};
+
+/**
+ * Depozito durumu artık kontrat üzerinden seçilmez; kontrat kaydedildiğinde
+ * otomatik depozito tahakkuku oluşur ve durum cari kayıtlardan türetilir:
+ * iade edildi → tahsil edildi (depozito tahsilatları tutarı karşılıyor) →
+ * ödeme bekliyor (yalnızca tahakkuk işlenmiş).
+ */
+const depositStatusOf = (
+  contract: Contract,
+  collectedByContract: Map<string, number>,
+): string => {
+  if (contract.depositReturnedAt || contract.depositStatus === "returned") {
+    return "returned";
+  }
+  const collected = collectedByContract.get(contract._id.toString()) ?? 0;
+  if (collected >= (contract.depositAmount ?? 0)) return "paid";
+  return "pending";
 };
 
 const CSV_HEADERS = [
@@ -92,6 +110,17 @@ export function DepositSection() {
     return map;
   }, [tenants]);
 
+  // Kontrat başına tahsil edilen depozito toplamı (depozito türündeki tahsilatlar).
+  const depositCollectedByContract = useMemo(() => {
+    const map = new Map<string, number>();
+    (collections ?? []).forEach((c) => {
+      if ((c.collectionType ?? "rent") !== "deposit") return;
+      const key = c.contractId.toString();
+      map.set(key, (map.get(key) ?? 0) + c.amount);
+    });
+    return map;
+  }, [collections]);
+
   const depositContracts = useMemo(
     () => (contracts ?? []).filter((c) => c.depositAmount > 0),
     [contracts],
@@ -105,7 +134,7 @@ export function DepositSection() {
     return depositContracts.filter((c) => {
       if (fromMs !== null && c.startDate < fromMs) return false;
       if (toMs !== null && c.startDate > toMs) return false;
-      const status = c.depositStatus ?? "paid";
+      const status = depositStatusOf(c, depositCollectedByContract);
       if (statusFilter === "held" && status === "returned") return false;
       if (statusFilter === "returned" && status !== "returned") return false;
       if (q === "") return true;
@@ -130,6 +159,7 @@ export function DepositSection() {
     propertyMap,
     ownerMap,
     tenantMap,
+    depositCollectedByContract,
     search,
     from,
     to,
@@ -140,16 +170,20 @@ export function DepositSection() {
     () => ({
       total: depositContracts.reduce((sum, c) => sum + c.depositAmount, 0),
       held: depositContracts
-        .filter((c) => (c.depositStatus ?? "paid") !== "returned")
+        .filter(
+          (c) => depositStatusOf(c, depositCollectedByContract) !== "returned",
+        )
         .reduce((sum, c) => sum + c.depositAmount, 0),
       returned: depositContracts
-        .filter((c) => c.depositStatus === "returned")
+        .filter(
+          (c) => depositStatusOf(c, depositCollectedByContract) === "returned",
+        )
         .reduce((sum, c) => sum + c.depositAmount, 0),
       pendingCount: depositContracts.filter(
-        (c) => (c.depositStatus ?? "paid") !== "returned",
+        (c) => depositStatusOf(c, depositCollectedByContract) !== "returned",
       ).length,
     }),
-    [depositContracts],
+    [depositContracts, depositCollectedByContract],
   );
 
   const rows = (c: Contract): (string | number | null)[] => {
@@ -161,7 +195,7 @@ export function DepositSection() {
       owner?.name ?? "—",
       tenant?.name ?? "—",
       c.depositAmount,
-      DEPOSIT_STATUS_LABEL[c.depositStatus ?? "paid"],
+      DEPOSIT_STATUS_LABEL[depositStatusOf(c, depositCollectedByContract)],
       formatDate(c.startDate),
       c.depositReturnedAt ? formatDate(c.depositReturnedAt) : "",
       c.depositNote ?? "",
@@ -303,7 +337,7 @@ export function DepositSection() {
             <EmptyTitle>Kayıt bulunamadı</EmptyTitle>
             <EmptyDescription>
               {depositContracts.length === 0
-                ? "Henüz depozito kaydı yok. Kontrat oluştururken depozito tutarı girildiğinde burada izlenir."
+                ? "Henüz depozito kaydı yok. Kontrat kaydedildiğinde depozito tahakkuku otomatik oluşturulur ve burada izlenir."
                 : "Arama, tarih aralığı veya durum filtrelerine uyan kayıt yok."}
             </EmptyDescription>
           </EmptyHeader>
@@ -329,7 +363,7 @@ export function DepositSection() {
                   const property = propertyMap.get(c.propertyId.toString());
                   const owner = ownerMap.get(c.ownerId.toString());
                   const tenant = tenantMap.get(c.tenantId.toString());
-                  const status = c.depositStatus ?? "paid";
+                  const status = depositStatusOf(c, depositCollectedByContract);
                   return (
                     <TableRow key={c._id} className="align-middle">
                       <TableCell>

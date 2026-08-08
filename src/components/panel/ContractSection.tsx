@@ -80,7 +80,6 @@ interface ContractFormState {
   rentAmount: string;
   depositAmount: string;
   depositMonths: string;
-  depositStatus: "pending" | "paid" | "held" | "returned";
   status: "active" | "ended";
   guarantorEnabled: boolean;
   guarantorName: string;
@@ -104,7 +103,6 @@ const emptyForm: ContractFormState = {
   rentAmount: "",
   depositAmount: "",
   depositMonths: "0",
-  depositStatus: "paid",
   status: "active",
   guarantorEnabled: false,
   guarantorName: "",
@@ -128,7 +126,6 @@ const formFromContract = (c: Contract): ContractFormState => ({
   rentAmount: String(c.rentAmount),
   depositAmount: String(c.depositAmount),
   depositMonths: c.depositMonths ? String(c.depositMonths) : "0",
-  depositStatus: c.depositStatus ?? "paid",
   status: c.status ?? "active",
   guarantorEnabled: c.guarantor != null,
   guarantorName: c.guarantor?.name ?? "",
@@ -157,16 +154,8 @@ const CSV_HEADERS = [
   "Süre (ay)",
   "Aylık Kira",
   "Depozito",
-  "Depozito Durumu",
   "Durum",
 ];
-
-const DEPOSIT_STATUS_LABEL: Record<string, string> = {
-  pending: "Ödeme bekliyor",
-  paid: "Ödendi",
-  held: "Elde tutuluyor",
-  returned: "İade edildi",
-};
 
 const contractEnd = (start: number, months: number): number => {
   const d = new Date(start);
@@ -286,7 +275,6 @@ export function ContractSection() {
       c.durationMonths,
       formatNumber(c.rentAmount),
       formatNumber(c.depositAmount),
-      DEPOSIT_STATUS_LABEL[c.depositStatus ?? "paid"],
       c.status === "active" ? "Aktif" : "Sona erdi",
     ];
   };
@@ -321,7 +309,6 @@ export function ContractSection() {
         (parseNumber(form.depositMonths) ?? 0) > 0
           ? parseNumber(form.depositMonths)
           : undefined,
-      depositStatus: form.depositStatus,
       status: form.status,
       guarantor:
         form.guarantorEnabled && hasGuarantor
@@ -371,7 +358,6 @@ export function ContractSection() {
         rentAmount: payload.rentAmount,
         depositAmount: payload.depositAmount,
         depositMonths: payload.depositMonths,
-        depositStatus: payload.depositStatus,
         guarantor: payload.guarantor,
         evictionCommitment: payload.evictionCommitment,
         evictionCommitmentDate: payload.evictionCommitmentDate,
@@ -953,8 +939,8 @@ function ContractFormDialog({
           </Field>
         </Row>
 
-        <Row cols={3}>
-          <Field label="Depozito Tutarı" hint="₺">
+        <Row cols={2}>
+          <Field label="Depozito Tutarı" hint="₺ · kaydedilince otomatik tahakkuk edilir">
             <Input
               value={form.depositAmount}
               onChange={(e) => set("depositAmount", e.target.value)}
@@ -982,24 +968,6 @@ function ContractFormDialog({
                 <SelectItem value="4">4 aylık kira</SelectItem>
                 <SelectItem value="6">6 aylık kira</SelectItem>
                 <SelectItem value="12">12 aylık kira</SelectItem>
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field label="Depozito Durumu">
-            <Select
-              value={form.depositStatus}
-              onValueChange={(value) =>
-                set("depositStatus", value as ContractFormState["depositStatus"])
-              }
-            >
-              <SelectTrigger className="rounded-none">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="pending">Ödeme bekliyor</SelectItem>
-                <SelectItem value="paid">Ödendi</SelectItem>
-                <SelectItem value="held">Elde tutuluyor</SelectItem>
-                <SelectItem value="returned">İade edildi</SelectItem>
               </SelectContent>
             </Select>
           </Field>
@@ -1310,23 +1278,22 @@ function ContractDetailDialog({
                 {formatCurrency(contract.depositAmount)}
                 {contract.depositMonths ? (
                   <span className="ml-2 text-xs text-muted-foreground">
-                    {contract.depositMonths} aylık kira karşılığı
+                    {contract.depositMonths} aylık kira karşılığı · tahakkuk edildi
                   </span>
-                ) : null}
-                <span className="ml-2 text-xs text-muted-foreground">
-                  {DEPOSIT_STATUS_LABEL[contract.depositStatus ?? "paid"]}
-                </span>
+                ) : (
+                  <span className="ml-2 text-xs text-muted-foreground">
+                    tahakkuk edildi
+                  </span>
+                )}
               </span>
             }
           />
-          {contract.depositStatus === "returned" && (
+          {contract.depositReturnedAt && (
             <DetailRow
               label="Depozito İadesi"
               value={
                 <span>
-                  {contract.depositReturnedAt
-                    ? formatDate(contract.depositReturnedAt)
-                    : "—"}
+                  {formatDate(contract.depositReturnedAt)}
                   {contract.depositNote && (
                     <span className="ml-2 text-xs text-muted-foreground">
                       {contract.depositNote}
@@ -1493,7 +1460,6 @@ type ContractDocData = Pick<
   | "rentAmount"
   | "depositAmount"
   | "depositMonths"
-  | "depositStatus"
   | "guarantor"
   | "evictionCommitment"
   | "evictionCommitmentDate"
@@ -1612,8 +1578,6 @@ function buildContractHtml(
 
   const start = formatDate(contract.startDate);
   const end = formatDate(contractEnd(contract.startDate, contract.durationMonths));
-  const depositStatus =
-    DEPOSIT_STATUS_LABEL[contract.depositStatus ?? "paid"];
   const fixtureList = (contract.fixtures ?? []).length
     ? (contract.fixtures ?? [])
         .map((f) => esc(f.name) + ` (${formatNumber(f.quantity)} adet)`)
@@ -1703,7 +1667,7 @@ function buildContractHtml(
         <p class="clause">Kiracı, kira bedelini her ayın başında ödemekle yükümlüdür. Aylık kira bedeli ${esc(tl(contract.rentAmount))} olarak belirlenmiştir.</p>
 
         <h2>MADDE 5 — DEPOZİTO</h2>
-        <p class="clause">Depozito tutarı ${esc(tl(contract.depositAmount))} olup durumu: ${esc(depositStatus)}. ${
+        <p class="clause">Depozito tutarı ${esc(tl(contract.depositAmount))} olarak belirlenmiştir. ${
           contract.depositMonths
             ? `Depozito, ${esc(String(contract.depositMonths))} aylık kira bedeli karşılığıdır (aylık kira ${esc(tl(contract.rentAmount))} × ${esc(String(contract.depositMonths))} ay = ${esc(tl(contract.rentAmount * contract.depositMonths))}). `
             : ""

@@ -30,14 +30,21 @@ export const contractMonths = (
 /**
  * Post the tenant debit / owner credit pair for an accrual.
  * Used both when creating a due accrual and by the daily reconcile cron.
+ * type "deposit" writes a distinct "Depozito tahakkuku" description so the
+ * cari hesap distinguishes rent from deposit accruals.
  */
 export const postAccrualLedger = async (
   ctx: MutationCtx,
   actor: Doc<"users"> | null,
   contract: Contract,
   accrual: { _id: Id<"accruals">; period: string; dueDate: number; amount: number },
+  type: "rent" | "deposit" = "rent",
 ) => {
   const referenceId = accrual._id.toString();
+  const label =
+    type === "deposit"
+      ? `Depozito tahakkuku — ${accrual.period}`
+      : `Kira tahakkuku — ${accrual.period}`;
 
   // Kiracı borçlanır, malik alacaklanır.
   await postLedgerEntry(ctx, actor, {
@@ -47,7 +54,7 @@ export const postAccrualLedger = async (
     personId: contract.tenantId,
     kind: "accrual",
     amount: -accrual.amount,
-    description: `Kira tahakkuku — ${accrual.period}`,
+    description: label,
     date: accrual.dueDate,
     referenceId,
   });
@@ -58,7 +65,7 @@ export const postAccrualLedger = async (
     personId: contract.ownerId,
     kind: "accrual",
     amount: accrual.amount,
-    description: `Kira tahakkuku — ${accrual.period}`,
+    description: label,
     date: accrual.dueDate,
     referenceId,
   });
@@ -67,7 +74,8 @@ export const postAccrualLedger = async (
 /**
  * Create one accrual record. Only posts ledger entries once the debt is due
  * (dueDate <= now); future accruals are posted by the daily reconcile cron
- * when their due date arrives.
+ * when their due date arrives. type "deposit" creates the automatic deposit
+ * accrual posted when a contract is saved.
  */
 export const createAccrualWithLedger = async (
   ctx: MutationCtx,
@@ -75,6 +83,7 @@ export const createAccrualWithLedger = async (
   contract: Contract,
   month: { period: string; dueDate: number },
   amount?: number,
+  type: "rent" | "deposit" = "rent",
 ) => {
   const rent = amount ?? contract.rentAmount;
   const accrualId = await ctx.db.insert("accruals", {
@@ -83,6 +92,7 @@ export const createAccrualWithLedger = async (
     period: month.period,
     dueDate: month.dueDate,
     amount: rent,
+    type,
     status: "pending",
     createdBy: actor?._id,
   });
@@ -93,7 +103,7 @@ export const createAccrualWithLedger = async (
       period: month.period,
       dueDate: month.dueDate,
       amount: rent,
-    });
+    }, type);
   }
 
   return accrualId;

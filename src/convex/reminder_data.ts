@@ -29,6 +29,7 @@ export const listDueAccruals = internalQuery({
     const due = accruals
       .filter(
         (a) =>
+          (a.type ?? "rent") !== "deposit" && // depozito tahakkukları için hatırlatma gönderilmez
           (a.status ?? "pending") !== "paid" &&
           a.dueDate >= now &&
           a.dueDate <= windowEnd,

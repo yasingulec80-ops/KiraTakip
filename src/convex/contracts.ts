@@ -5,11 +5,11 @@ import type { MutationCtx } from "./_generated/server";
 import {
   ROLES,
   contractStatusValidator,
-  depositStatusValidator,
   fixtureValidator,
   guarantorValidator,
 } from "./schema";
 import {
+  deleteLedgerForReference,
   getActor,
   getAuthorizedPropertyIds,
   postLedgerEntry,
@@ -19,6 +19,8 @@ import {
 import {
   contractMonths,
   createAccrualWithLedger,
+  periodKey,
+  postAccrualLedger,
 } from "./ledger_ops";
 
 const contractArgs = {
@@ -30,7 +32,6 @@ const contractArgs = {
   rentAmount: v.number(),
   depositAmount: v.number(),
   depositMonths: v.optional(v.number()),
-  depositStatus: v.optional(depositStatusValidator),
   guarantor: v.optional(guarantorValidator),
   evictionCommitment: v.optional(v.boolean()),
   evictionCommitmentDate: v.optional(v.number()),
@@ -88,6 +89,19 @@ export const create = mutation({
       await createAccrualWithLedger(ctx, actor, contract, month);
     }
 
+    // Depozito tahakkuku — kontrat kaydedildiğinde otomatik oluşturulur ve
+    // cari hesaplara işlenir (kiracı borçlanır, malik alacaklanır).
+    if ((contract.depositAmount ?? 0) > 0) {
+      await createAccrualWithLedger(
+        ctx,
+        actor,
+        contract,
+        { period: periodKey(contract.startDate), dueDate: contract.startDate },
+        contract.depositAmount,
+        "deposit",
+      );
+    }
+
     return contractId;
   },
 });
@@ -120,7 +134,6 @@ export const update = mutation({
       rentAmount: data.rentAmount,
       depositAmount: data.depositAmount,
       depositMonths: data.depositMonths,
-      depositStatus: data.depositStatus,
       guarantor: data.guarantor,
       evictionCommitment: data.evictionCommitment,
       evictionCommitmentDate: data.evictionCommitmentDate,
@@ -133,6 +146,7 @@ export const update = mutation({
     const updated = await ctx.db.get(id);
     if (updated) {
       await generateMissingAccruals(ctx, actor, updated);
+      await syncDepositAccrual(ctx, actor, updated);
     }
   },
 });
@@ -312,10 +326,80 @@ const generateMissingAccruals = async (
     .query("accruals")
     .withIndex("by_contract", (q) => q.eq("contractId", contract._id))
     .collect();
-  const have = new Set(existing.map((a) => a.period));
+  // Depozito tahakkuku aylık kira döngüsünün dışındadır — ilk ayın dönemiyle
+  // çakışmasına rağmen kira tahakkuku olarak kabul edilmez.
+  const rentPeriods = new Set(
+    existing
+      .filter((a) => (a.type ?? "rent") !== "deposit")
+      .map((a) => a.period),
+  );
   for (const month of contractMonths(contract)) {
-    if (!have.has(month.period)) {
+    if (!rentPeriods.has(month.period)) {
       await createAccrualWithLedger(ctx, actor, contract, month);
+    }
+  }
+};
+
+/**
+ * Keep the automatic deposit accrual in sync with the contract's deposit.
+ * Creates it when a deposit appears, updates its amount when it changes
+ * (re-posting the cari hesap entries), and removes it when the deposit is
+ * cleared to zero.
+ */
+const syncDepositAccrual = async (
+  ctx: MutationCtx,
+  actor: Doc<"users">,
+  contract: Contract,
+) => {
+  const accruals = await ctx.db
+    .query("accruals")
+    .withIndex("by_contract", (q) => q.eq("contractId", contract._id))
+    .collect();
+  const depositAccrual = accruals.find(
+    (a) => (a.type ?? "rent") === "deposit",
+  );
+
+  if (!depositAccrual && (contract.depositAmount ?? 0) > 0) {
+    await createAccrualWithLedger(
+      ctx,
+      actor,
+      contract,
+      { period: periodKey(contract.startDate), dueDate: contract.startDate },
+      contract.depositAmount,
+      "deposit",
+    );
+    return;
+  }
+
+  if (!depositAccrual) return;
+
+  if ((contract.depositAmount ?? 0) <= 0) {
+    // Depozito kaldırıldı: tahakkuk ve cari kayıtları temizle.
+    await deleteLedgerForReference(ctx, depositAccrual._id.toString());
+    await ctx.db.delete(depositAccrual._id);
+    return;
+  }
+
+  if (depositAccrual.amount !== contract.depositAmount) {
+    await ctx.db.patch(depositAccrual._id, {
+      amount: contract.depositAmount,
+      dueDate: contract.startDate,
+      period: periodKey(contract.startDate),
+    });
+    await deleteLedgerForReference(ctx, depositAccrual._id.toString());
+    if (depositAccrual.dueDate <= Date.now() || contract.startDate <= Date.now()) {
+      await postAccrualLedger(
+        ctx,
+        actor,
+        contract,
+        {
+          _id: depositAccrual._id,
+          period: periodKey(contract.startDate),
+          dueDate: contract.startDate,
+          amount: contract.depositAmount,
+        },
+        "deposit",
+      );
     }
   }
 };

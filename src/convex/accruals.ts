@@ -63,7 +63,7 @@ export const reconcileAccrualLedgers = internalMutation({
             period: accrual.period,
             dueDate: accrual.dueDate,
             amount: accrual.amount,
-          });
+          }, accrual.type ?? "rent");
           posted += 1;
         }
       } else {
