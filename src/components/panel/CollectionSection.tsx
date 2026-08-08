@@ -168,7 +168,7 @@ export function CollectionSection() {
       const owner = ownerMap.get(c.collectedByProxyOwnerId.toString());
       return owner?.proxy?.name ?? owner?.name ?? "Vekil";
     }
-    return "Ofis";
+    return "Malik";
   };
 
   const rows = (c: Collection): (string | number | null)[] => {
@@ -362,7 +362,7 @@ export function CollectionSection() {
                         {c.collectedByProxyOwnerId ? (
                           <span className="font-medium">{collectedByLabel(c)}</span>
                         ) : (
-                          <span className="text-muted-foreground">Ofis</span>
+                          <span className="text-muted-foreground">Malik</span>
                         )}
                       </TableCell>
                       <TableCell className="max-w-40 truncate text-sm text-muted-foreground">
@@ -679,7 +679,7 @@ function CollectionFormDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="office">Ofis / Yönetim</SelectItem>
+                <SelectItem value="office">Malik</SelectItem>
                 {proxyOwners.map((o) => (
                   <SelectItem key={o._id} value={o._id}>
                     {o.proxy?.name} ({o.name} adına)

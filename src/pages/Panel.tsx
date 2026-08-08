@@ -894,7 +894,7 @@ function CollectionDetailList({
       const owner = ownerMap.get(c.collectedByProxyOwnerId.toString());
       return owner?.proxy?.name ?? owner?.name ?? "Vekil";
     }
-    return "Ofis";
+    return "Malik";
   };
 
   return (
@@ -940,7 +940,7 @@ function CollectionDetailList({
                 {c.collectedByProxyOwnerId ? (
                   <span className="font-medium">{collectedByLabel(c)}</span>
                 ) : (
-                  <span className="text-muted-foreground">Ofis</span>
+                  <span className="text-muted-foreground">Malik</span>
                 )}
               </TableCell>
               <TableCell className="text-sm tabular-nums text-emerald-700">
