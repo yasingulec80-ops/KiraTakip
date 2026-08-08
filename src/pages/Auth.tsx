@@ -3,7 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api } from "@/convex/_generated/api";
 import { useAuth } from "@/hooks/use-auth";
-import { ArrowRight, KeyRound, Loader2, ShieldCheck, User } from "lucide-react";
+import { ArrowRight, KeyRound, Loader2, User } from "lucide-react";
 import { Suspense, useEffect, useState } from "react";
 import { useMutation } from "convex/react";
 import { Link, useNavigate, useSearchParams } from "react-router";
@@ -116,7 +116,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                     name="username"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    placeholder="örn. Admin"
+                    placeholder="Kullanıcı adınız"
                     autoComplete="username"
                     className="rounded-none pl-9"
                     disabled={isLoading}
@@ -170,17 +170,6 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                 )}
               </Button>
             </form>
-          </div>
-
-          <div className="mt-4 flex items-start gap-3 border border-dashed border-border bg-muted/40 p-4">
-            <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-brand" />
-            <p className="text-xs leading-5 text-muted-foreground">
-              <span className="font-medium text-foreground">İlk kurulum:</span>{" "}
-              sistem yönetici hesabını otomatik oluşturur — kullanıcı adı{" "}
-              <span className="font-medium text-foreground">Admin</span>, şifre{" "}
-              <span className="font-medium text-foreground">8842</span>. Girişten
-              sonra kullanıcıları ve yetkilerini yönetebilirsiniz.
-            </p>
           </div>
         </div>
       </div>
