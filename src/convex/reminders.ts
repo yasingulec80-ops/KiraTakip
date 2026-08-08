@@ -2,6 +2,7 @@
 
 import { action } from "./_generated/server";
 import { internal } from "./_generated/api";
+import { createVlyIntegrations } from "@vly-ai/integrations";
 import { v } from "convex/values";
 
 const formatAmount = (value: number) =>
@@ -61,43 +62,35 @@ const buildEmailHtml = (row: {
 </div>`;
 
 /**
- * Send rent reminders for upcoming unpaid accruals via Resend.
+ * Send rent reminders for upcoming unpaid accruals through the platform's
+ * email gateway (vly.email.send, billed via VLY_INTEGRATION_KEY).
  * Returns { configured, sent, failed } so the UI can report the result.
- * Calls runQuery/runMutation against internal reminder helpers.
  */
 export const sendRentReminders = action({
   args: { daysBefore: v.optional(v.number()) },
   handler: async (ctx, args) => {
     const daysBefore = Math.max(1, Math.min(30, args.daysBefore ?? 3));
-    const apiKey = process.env.RESEND_API_KEY;
-    if (!apiKey) {
+    const token = process.env.VLY_INTEGRATION_KEY;
+    if (!token) {
       return { configured: false, sent: 0, failed: 0 };
     }
 
+    const vly = createVlyIntegrations({ deploymentToken: token });
     const rows = await ctx.runQuery(internal.reminder_data.listDueAccruals, {
       daysBefore,
     });
 
-    const from = process.env.EMAIL_FROM ?? "Kira Takip <onboarding@resend.dev>";
     let sent = 0;
     let failed = 0;
 
     for (const row of rows) {
       try {
-        const response = await fetch("https://api.resend.com/emails", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            from,
-            to: [row.tenantEmail],
-            subject: `Kira hatırlatması — ${row.propertyName} · ${row.period}`,
-            html: buildEmailHtml(row),
-          }),
+        const result = await vly.email.send({
+          to: row.tenantEmail,
+          subject: `Kira hatırlatması — ${row.propertyName} · ${row.period}`,
+          html: buildEmailHtml(row),
         });
-        if (!response.ok) {
+        if (!result.success || result.data?.status === "failed") {
           failed += 1;
           continue;
         }

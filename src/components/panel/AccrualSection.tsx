@@ -27,7 +27,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { api, internal } from "@/convex/_generated/api";
+import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { useAuth } from "@/hooks/use-auth";
 import {
@@ -79,7 +79,7 @@ export function AccrualSection() {
   const tenants = useQuery(api.tenants.list);
   const createAccrual = useMutation(api.accruals.create);
   const removeAccrual = useMutation(api.accruals.remove);
-  const sendReminders = useAction(internal.reminders.sendRentReminders);
+  const sendReminders = useAction(api.reminders.sendRentReminders);
 
   const [search, setSearch] = useState("");
   const [from, setFrom] = useState("");
