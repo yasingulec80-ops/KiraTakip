@@ -46,6 +46,7 @@ import { toast } from "sonner";
 import { DialogShell, Field, Row } from "./fields";
 import { SectionToolbar } from "./SectionToolbar";
 import { DevirDialog } from "./DevirDialog";
+import { transferIsDeposit } from "@/lib/ledger-kind";
 
 type LedgerEntry = Doc<"ledgerEntries">;
 type Owner = Doc<"owners">;
@@ -82,7 +83,7 @@ const KIND_LABEL: Record<string, string> = {
 /** Devir kayıtlarını türüne göre ayırır: kira devri / depozito devri. */
 const entryKindLabel = (e: LedgerEntry): string =>
   e.kind === "transfer"
-    ? e.description.includes("depozito")
+    ? transferIsDeposit(e.description)
       ? "Depozito Devri"
       : "Kira Devri"
     : KIND_LABEL[e.kind];
@@ -212,7 +213,7 @@ export function LedgerSection() {
       )
       .reduce(
         (acc, e) => {
-          const isDeposit = e.description.includes("depozito");
+          const isDeposit = transferIsDeposit(e.description);
           if (
             e.kind === "collection" &&
             e.description.startsWith("Vekil tahsilatı")
@@ -253,7 +254,7 @@ export function LedgerSection() {
           e.personId.toString() === account.personId,
       )
       .forEach((e) => {
-        const isDeposit = e.description.includes("depozito");
+        const isDeposit = transferIsDeposit(e.description);
         if (
           e.kind === "collection" &&
           e.description.startsWith("Vekil tahsilatı")
@@ -633,10 +634,10 @@ function PersonDetailDialog({
   // Vekil hesabında tahsilat ve devirler kira/depozito olarak ayrı ayrı gösterilir.
   const transfers = entries.filter((e) => e.kind === "transfer");
   const rentTransfers = transfers.filter(
-    (e) => !e.description.includes("depozito"),
+    (e) => !transferIsDeposit(e.description),
   );
   const depositTransfers = transfers.filter((e) =>
-    e.description.includes("depozito"),
+    transferIsDeposit(e.description),
   );
   const vekilCollections = entries.filter(
     (e) =>
@@ -644,10 +645,10 @@ function PersonDetailDialog({
       e.description.startsWith("Vekil tahsilatı"),
   );
   const collectedRent = vekilCollections.filter(
-    (e) => !e.description.includes("depozito"),
+    (e) => !transferIsDeposit(e.description),
   );
   const collectedDeposit = vekilCollections.filter((e) =>
-    e.description.includes("depozito"),
+    transferIsDeposit(e.description),
   );
   const hasVekilActivity =
     transfers.length > 0 || vekilCollections.length > 0;
@@ -791,7 +792,7 @@ function PersonDetailDialog({
                           variant="outline"
                           className={
                             e.kind === "transfer"
-                              ? e.description.includes("depozito")
+                              ? transferIsDeposit(e.description)
                                 ? "rounded-none text-brand"
                                 : "rounded-none text-foreground"
                               : "rounded-none text-muted-foreground"

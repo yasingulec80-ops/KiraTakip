@@ -23,22 +23,12 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { DevirDialog } from "./DevirDialog";
 import { SectionToolbar } from "./SectionToolbar";
+import { transferIsDeposit } from "@/lib/ledger-kind";
 
-type LedgerEntry = Doc<"ledgerEntries">;
 type Owner = Doc<"owners">;
 type Contract = Doc<"contracts">;
 type Property = Doc<"properties">;
 type Tenant = Doc<"tenants">;
-
-const SUMMARY_HEADERS = [
-  "Malik",
-  "Vekil",
-  "Tahsil Edilen Kira",
-  "Tahsil Edilen Depozito",
-  "Kira Devri",
-  "Depozito Devri",
-  "Teslim Bekleyen",
-];
 
 const DETAIL_HEADERS = [
   "Malik",
@@ -108,7 +98,7 @@ export function VekilDevirReport() {
       )
       .reduce(
         (acc, e) => {
-          const isDeposit = e.description.includes("depozito");
+          const isDeposit = transferIsDeposit(e.description);
           if (
             e.kind === "collection" &&
             e.description.startsWith("Vekil tahsilatı")
@@ -214,7 +204,7 @@ export function VekilDevirReport() {
     for (const e of proxyEntries) {
       const vd = vekilData.get(e.personId.toString());
       if (!vd) continue;
-      const isDeposit = e.description.includes("depozito");
+      const isDeposit = transferIsDeposit(e.description);
 
       if (
         e.kind === "collection" &&

@@ -16,6 +16,7 @@ import {
 } from "./ledger_ops";
 import { ledgerKindValidator, ledgerPersonTypeValidator } from "./schema";
 import { refreshAccrualStatus } from "./accruals";
+import { transferIsDeposit } from "../lib/ledger-kind";
 
 /** List ledger entries the user may see (property access). */
 export const list = query({
@@ -230,7 +231,7 @@ export const devir = mutation({
       .collect();
     const devirables = entries.reduce(
       (acc, e) => {
-        const isDeposit = e.description.includes("depozito");
+        const isDeposit = transferIsDeposit(e.description);
         if (
           e.kind === "collection" &&
           e.description.startsWith("Vekil tahsilatı")
