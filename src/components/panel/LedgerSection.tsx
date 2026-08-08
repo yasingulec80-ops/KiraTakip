@@ -542,6 +542,22 @@ function PersonDetailDialog({
 }) {
   const balance = entries.reduce((sum, e) => sum + e.amount, 0);
 
+  // Vekil hesabında devirler kira ve depozito olarak ayrı ayrı gösterilir.
+  const transfers = entries.filter((e) => e.kind === "transfer");
+  const rentTransfers = transfers.filter(
+    (e) => !e.description.includes("depozito"),
+  );
+  const depositTransfers = transfers.filter((e) =>
+    e.description.includes("depozito"),
+  );
+
+  const transferKindLabel = (e: LedgerEntry): string =>
+    e.kind === "transfer"
+      ? e.description.includes("depozito")
+        ? "Depozito Devri"
+        : "Kira Devri"
+      : KIND_LABEL[e.kind];
+
   return (
     <DialogShell
       open={account !== null}
@@ -609,6 +625,31 @@ function PersonDetailDialog({
             </p>
           </div>
 
+          {transfers.length > 0 && (
+            <div className="grid gap-px border border-border bg-border sm:grid-cols-2">
+              <div className="bg-card p-4">
+                <p className="eyebrow text-muted-foreground">Kira Devri</p>
+                <p className="mt-1.5 font-display text-lg font-light tabular-nums">
+                  {formatCurrency(rentTransfers.reduce((s, e) => s + e.amount, 0))}
+                </p>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  {rentTransfers.length} teslim kaydı
+                </p>
+              </div>
+              <div className="bg-card p-4">
+                <p className="eyebrow text-muted-foreground">Depozito Devri</p>
+                <p className="mt-1.5 font-display text-lg font-light tabular-nums">
+                  {formatCurrency(
+                    depositTransfers.reduce((s, e) => s + e.amount, 0),
+                  )}
+                </p>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  {depositTransfers.length} iade kaydı
+                </p>
+              </div>
+            </div>
+          )}
+
           {entries.length === 0 ? (
             <p className="border border-dashed border-border px-4 py-8 text-center text-xs text-muted-foreground">
               Bu hesapta henüz kayıt yok.
@@ -630,8 +671,17 @@ function PersonDetailDialog({
                     <TableRow key={e._id} className="align-middle">
                       <TableCell className="text-sm">{formatDate(e.date)}</TableCell>
                       <TableCell>
-                        <Badge variant="outline" className="rounded-none text-muted-foreground">
-                          {KIND_LABEL[e.kind]}
+                        <Badge
+                          variant="outline"
+                          className={
+                            e.kind === "transfer"
+                              ? e.description.includes("depozito")
+                                ? "rounded-none text-brand"
+                                : "rounded-none text-foreground"
+                              : "rounded-none text-muted-foreground"
+                          }
+                        >
+                          {transferKindLabel(e)}
                         </Badge>
                       </TableCell>
                       <TableCell className="max-w-52 truncate text-sm">
