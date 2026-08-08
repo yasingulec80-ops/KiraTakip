@@ -2002,25 +2002,7 @@ function buildContractHtml(
             : contract.rentVat === "dahil"
               ? " (KDV dahil)"
               : "",
-        )} olarak hesaplanmıştır.${
-          contract.vatRate
-            ? ` KDV oranı %${esc(String(contract.vatRate))} olarak uygulanır; aylık KDV tutarı ${esc(
-                tl(
-                  contract.rentVat === "dahil"
-                    ? contract.rentAmount -
-                        contract.rentAmount / (1 + contract.vatRate / 100)
-                    : contract.rentAmount * (contract.vatRate / 100),
-                ),
-              )}, yıllık KDV tutarı ${esc(
-                tl(
-                  (contract.rentVat === "dahil"
-                    ? contract.rentAmount -
-                        contract.rentAmount / (1 + contract.vatRate / 100)
-                    : contract.rentAmount * (contract.vatRate / 100)) * 12,
-                ),
-              )} olarak hesaplanmıştır.`
-            : ""
-        }</p>
+        )} olarak hesaplanmıştır.</p>
 
         <h2>MADDE 5 — DEPOZİTO</h2>
         <p class="clause">Depozito tutarı ${esc(tl(contract.depositAmount))} olarak belirlenmiştir. ${
