@@ -80,10 +80,10 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
           <Link to="/" className="flex items-baseline gap-2">
             <span className="font-display text-xl font-medium tracking-tight">
-              EmlakDefteri
+              Kira Takip
             </span>
             <span className="hidden text-[10px] uppercase tracking-[0.22em] text-muted-foreground sm:inline">
-              Gayrimenkul Yönetimi
+              Gayrimenkul Yönetim Paneli
             </span>
           </Link>
           <Button asChild variant="ghost" size="sm" className="rounded-none">
@@ -101,7 +101,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
               Panele Giriş
             </h1>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              Kullanıcı adı ve şifrenizle giriş yapın.
+              Kullanıcı adınız ve şifrenizle giriş yapın.
             </p>
 
             <form onSubmit={handleSubmit} className="mt-8 space-y-5">
@@ -176,7 +176,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
             <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-brand" />
             <p className="text-xs leading-5 text-muted-foreground">
               <span className="font-medium text-foreground">İlk kurulum:</span>{" "}
-              sistem, yönetici hesabını otomatik oluşturur — Kullanıcı adı{" "}
+              sistem yönetici hesabını otomatik oluşturur — kullanıcı adı{" "}
               <span className="font-medium text-foreground">Admin</span>, şifre{" "}
               <span className="font-medium text-foreground">8842</span>. Girişten
               sonra kullanıcıları ve yetkilerini yönetebilirsiniz.

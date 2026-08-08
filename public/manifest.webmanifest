@@ -1,11 +1,11 @@
 {
-  "name": "freebuff.com application",
-  "short_name": "freebuff.com",
-  "description": "freebuff.com application",
+  "name": "Kira Takip",
+  "short_name": "Kira Takip",
+  "description": "Kira Takip — gayrimenkul, malik, kiracı ve kira yönetim paneli.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#000000",
+  "background_color": "#fbfaf6",
+  "theme_color": "#141210",
   "icons": [
     {
       "src": "/logo.png",

@@ -31,19 +31,19 @@ const MODULES = [
   {
     num: "05",
     name: "Tahakkuklar",
-    desc: "Kira tahakkuklarının otomatik oluşumu ve cari hesaplara işlenmesi.",
+    desc: "Kira tahakkuklarının otomatik oluşturulması ve cari hesaplara işlenmesi.",
     v1: false,
   },
   {
     num: "06",
     name: "Tahsilatlar",
-    desc: "Tahsilat kayıtları; işlendiğinde otomatik cari hesaba düşer.",
+    desc: "Tahsilat kayıtlarının işlenmesi ve cari hesaplara otomatik kaydı.",
     v1: false,
   },
   {
     num: "07",
     name: "Masraflar",
-    desc: "Aidat, sigorta, tadilat, boya ve diğer gider kalemleri.",
+    desc: "Aidat, yatırım, sigorta, tadilat-bakım, boya ve diğer gider kalemleri.",
     v1: false,
   },
   {
@@ -69,10 +69,10 @@ export default function Landing() {
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
           <Link to="/" className="flex items-baseline gap-2">
             <span className="font-display text-xl font-medium tracking-tight">
-              EmlakDefteri
+              Kira Takip
             </span>
             <span className="hidden text-[10px] uppercase tracking-[0.22em] text-muted-foreground sm:inline">
-              Gayrimenkul Yönetimi
+              Gayrimenkul Yönetim Paneli
             </span>
           </Link>
           <nav className="flex items-center gap-6">
@@ -110,12 +110,12 @@ export default function Landing() {
             <p className="eyebrow text-brand">Kontrol ve Takip Paneli</p>
             <h1 className="mt-5 font-display text-4xl font-light leading-[1.08] tracking-tight sm:text-5xl md:text-6xl">
               Gayrimenkulleriniz, malikleriniz ve kiracılarınız —{" "}
-              <span className="italic text-muted-foreground">tek defterde.</span>
+              <span className="italic text-muted-foreground">tek panelde.</span>
             </h1>
             <p className="mt-6 max-w-xl text-base leading-7 text-muted-foreground">
-              EmlakDefteri, gayrimenkul portföyünüzü sade ve özenli bir panelde
+              Kira Takip, gayrimenkul portföyünüzü sade ve özenli bir panelde
               toplar. Her malik, her kiracı, her gayrimenkul bir kayıt; her
-              kayıt bir bakışta. Sürüm 1; gayrimenkuller ve kişilerle başlar,
+              kayıt bir bakışta. Sürüm 1 gayrimenkuller ve kişilerle başlar;
               kontrat ve cari hesaplara doğru büyür.
             </p>
             <div className="mt-9 flex flex-wrap items-center gap-3">
@@ -145,7 +145,7 @@ export default function Landing() {
               ["08", "modül"],
               ["03", "sürüm 1'de"],
               ["7/24", "erişim"],
-              ["1", "paneli"],
+              ["01", "panel"],
             ].map(([value, label]) => (
               <div key={label} className="bg-card p-5">
                 <p className="font-display text-3xl font-light">{value}</p>
@@ -160,7 +160,7 @@ export default function Landing() {
           {[
             ["Sürüm 1 odağı", "Gayrimenkul ve kişiler — malik, vekil, kiracı, kefil."],
             ["Giriş güvenliği", "Her kullanıcı yalnızca yetkili olduğu gayrimenkulleri görür."],
-            ["İlk yönetici", "Profesyonel yönetici hesabıyla panel kurulur, yönetici kullanıcıları ekler."],
+            ["İlk yönetici", "Panel, profesyonel yönetici hesabıyla kurulur; yönetici kullanıcıları ekler."],
           ].map(([title, desc]) => (
             <div key={title} className="bg-card p-6">
               <p className="eyebrow text-brand">{title}</p>
@@ -267,14 +267,14 @@ export default function Landing() {
         <div className="mx-auto flex max-w-6xl flex-col items-start justify-between gap-4 px-6 py-10 sm:flex-row sm:items-center">
           <div className="flex items-baseline gap-2">
             <span className="font-display text-lg font-medium tracking-tight">
-              EmlakDefteri
+              Kira Takip
             </span>
             <span className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
               Gayrimenkul Yönetim Paneli
             </span>
           </div>
           <p className="text-xs text-muted-foreground">
-            © {new Date().getFullYear()} EmlakDefteri · Sürüm 1
+            © {new Date().getFullYear()} Kira Takip · Sürüm 1
           </p>
         </div>
       </footer>

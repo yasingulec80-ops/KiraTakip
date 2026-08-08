@@ -110,7 +110,7 @@ export function printReport(
     <h1>${escapeHtml(title)}</h1>
     <div class="meta">${escapeHtml(meta)}</div>
   </div>
-  <div class="sub">${escapeHtml("EmlakDefteri — gayrimenkul yönetim paneli")}</div>
+  <div class="sub">${escapeHtml("Kira Takip — gayrimenkul yönetim paneli")}</div>
   <table>
     <thead><tr>${thead}</tr></thead>
     <tbody>${tbody}</tbody>

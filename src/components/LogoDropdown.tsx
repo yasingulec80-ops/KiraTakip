@@ -46,7 +46,7 @@ export function LogoDropdown() {
       <DropdownMenuContent align="start" className="w-48">
         <DropdownMenuItem onClick={handleGoHome} className="cursor-pointer">
           <Home className="mr-2 h-4 w-4" />
-          Landing Page
+          Ana Sayfa
         </DropdownMenuItem>
         {isAuthenticated && (
           <>
@@ -56,7 +56,7 @@ export function LogoDropdown() {
               className="cursor-pointer text-destructive focus:text-destructive"
             >
               <LogOut className="mr-2 h-4 w-4" />
-              Sign Out
+              Çıkış Yap
             </DropdownMenuItem>
           </>
         )}

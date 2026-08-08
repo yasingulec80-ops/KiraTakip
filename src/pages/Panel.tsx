@@ -103,7 +103,7 @@ export default function Panel() {
       },
       {
         id: "collectedRents",
-        label: "Tahsil edilen Kiralar",
+        label: "Tahsil Edilen Kiralar",
         value: "—",
         caption: "Sürüm 2",
         muted: true,
@@ -151,7 +151,7 @@ export default function Panel() {
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6">
           <div className="flex items-baseline gap-2">
             <Link to="/" className="font-display text-xl font-medium tracking-tight">
-              EmlakDefteri
+              Kira Takip
             </Link>
             <span className="hidden text-[10px] uppercase tracking-[0.22em] text-muted-foreground md:inline">
               Gayrimenkul Yönetim Paneli
@@ -304,7 +304,7 @@ export default function Panel() {
 
         {/* Footer */}
         <footer className="mt-16 flex flex-wrap items-center justify-between gap-2 border-t border-border py-6 text-xs text-muted-foreground">
-          <span>EmlakDefteri · Sürüm 1 — Gayrimenkul ve kişiler</span>
+          <span>Kira Takip · Sürüm 1 — Gayrimenkul ve kişiler</span>
           <span className="flex items-center gap-1.5">
             <Building2 className="h-3.5 w-3.5" />
             Gayrimenkul Yönetim Paneli

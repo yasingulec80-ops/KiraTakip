@@ -456,7 +456,7 @@ function TenantFormDialog({
               className="rounded-none"
             />
           </Field>
-          <Field label="Mail Adresi">
+          <Field label="E-posta Adresi">
             <Input
               type="email"
               value={form.email}
@@ -517,7 +517,7 @@ function TenantFormDialog({
                     className="rounded-none"
                   />
                 </Field>
-                <Field label="Kefil Mail Adresi">
+                <Field label="Kefil E-posta Adresi">
                   <Input
                     type="email"
                     value={form.guarantorEmail}

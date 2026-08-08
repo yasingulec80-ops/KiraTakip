@@ -41,7 +41,7 @@ export const V2_MODULES: Record<
   },
   collectedRents: {
     num: -1,
-    title: "Tahsil edilen Kiralar",
+    title: "Tahsil Edilen Kiralar",
     desc: "Tahsil edilmiş kiraların dönemsel dökümü.",
   },
 };
