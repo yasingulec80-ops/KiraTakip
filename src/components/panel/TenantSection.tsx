@@ -75,7 +75,7 @@ const emptyForm: TenantFormState = {
 const formFromTenant = (t: Tenant): TenantFormState => ({
   isCompany: t.isCompany === true,
   name: t.name,
-  tcNo: t.tcNo,
+  tcNo: t.tcNo ?? "",
   taxOffice: t.taxOffice ?? "",
   taxNumber: t.taxNumber ?? "",
   signatoryName: t.signatoryName ?? "",
@@ -180,7 +180,7 @@ export function TenantSection() {
   const handleSave = async (form: TenantFormState) => {
     const payload = {
       name: form.name.trim(),
-      tcNo: form.tcNo.trim(),
+      tcNo: form.isCompany ? undefined : form.tcNo.trim(),
       phone: form.phone.trim(),
       address: form.address.trim(),
       email: form.email.trim(),

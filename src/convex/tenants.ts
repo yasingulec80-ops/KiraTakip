@@ -13,7 +13,7 @@ const getActor = async (ctx: any): Promise<Doc<"users"> | null> => {
 
 const tenantArgs = {
   name: v.string(),
-  tcNo: v.string(),
+  tcNo: v.optional(v.string()),
   phone: v.string(),
   address: v.string(),
   email: v.string(),
@@ -42,6 +42,7 @@ export const create = mutation({
 
     return await ctx.db.insert("tenants", {
       ...args,
+      tcNo: args.tcNo ?? "",
       guarantor: args.guarantor ?? null,
       isCompany: args.isCompany ?? false,
       taxOffice: args.taxOffice,
@@ -68,6 +69,18 @@ export const update = mutation({
       if (value !== undefined) patch[key] = value;
     }
     patch.guarantor = data.guarantor ?? null;
+
+    // Kişi ⇄ şirket dönüşümlerinde bayat alanları temizle:
+    // - şirkete dönüştüyse eski TC bilgisi kaldırılır,
+    // - kişiye dönüştüyse şirket bilgileri kaldırılır.
+    if (data.isCompany === true) {
+      patch.tcNo = null;
+    } else if (data.isCompany === false) {
+      patch.taxOffice = null;
+      patch.taxNumber = null;
+      patch.signatoryName = null;
+      patch.signatoryTcNo = null;
+    }
 
     await ctx.db.patch(id, patch as any);
   },

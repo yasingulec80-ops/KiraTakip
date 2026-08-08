@@ -75,7 +75,7 @@ const emptyForm: OwnerFormState = {
 const formFromOwner = (o: Owner): OwnerFormState => ({
   isCompany: o.isCompany === true,
   name: o.name,
-  tcNo: o.tcNo,
+  tcNo: o.tcNo ?? "",
   taxOffice: o.taxOffice ?? "",
   taxNumber: o.taxNumber ?? "",
   signatoryName: o.signatoryName ?? "",
@@ -185,7 +185,7 @@ export function OwnerSection() {
   const handleSave = async (form: OwnerFormState) => {
     const payload = {
       name: form.name.trim(),
-      tcNo: form.tcNo.trim(),
+      tcNo: form.isCompany ? undefined : form.tcNo.trim(),
       phone: form.phone.trim(),
       address: form.address.trim(),
       email: form.email.trim(),
