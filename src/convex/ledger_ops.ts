@@ -27,10 +27,51 @@ export const contractMonths = (
   return months;
 };
 
-/** Create one accrual record and post tenant/owner ledger entries. */
+/**
+ * Post the tenant debit / owner credit pair for an accrual.
+ * Used both when creating a due accrual and by the daily reconcile cron.
+ */
+export const postAccrualLedger = async (
+  ctx: MutationCtx,
+  actor: Doc<"users"> | null,
+  contract: Contract,
+  accrual: { _id: Id<"accruals">; period: string; dueDate: number; amount: number },
+) => {
+  const referenceId = accrual._id.toString();
+
+  // Kiracı borçlanır, malik alacaklanır.
+  await postLedgerEntry(ctx, actor, {
+    propertyId: contract.propertyId,
+    contractId: contract._id,
+    personType: "tenant",
+    personId: contract.tenantId,
+    kind: "accrual",
+    amount: -accrual.amount,
+    description: `Kira tahakkuku — ${accrual.period}`,
+    date: accrual.dueDate,
+    referenceId,
+  });
+  await postLedgerEntry(ctx, actor, {
+    propertyId: contract.propertyId,
+    contractId: contract._id,
+    personType: "owner",
+    personId: contract.ownerId,
+    kind: "accrual",
+    amount: accrual.amount,
+    description: `Kira tahakkuku — ${accrual.period}`,
+    date: accrual.dueDate,
+    referenceId,
+  });
+};
+
+/**
+ * Create one accrual record. Only posts ledger entries once the debt is due
+ * (dueDate <= now); future accruals are posted by the daily reconcile cron
+ * when their due date arrives.
+ */
 export const createAccrualWithLedger = async (
   ctx: MutationCtx,
-  actor: Doc<"users">,
+  actor: Doc<"users"> | null,
   contract: Contract,
   month: { period: string; dueDate: number },
   amount?: number,
@@ -43,33 +84,17 @@ export const createAccrualWithLedger = async (
     dueDate: month.dueDate,
     amount: rent,
     status: "pending",
-    createdBy: actor._id,
+    createdBy: actor?._id,
   });
-  const referenceId = accrualId.toString();
 
-  // Kiracı borçlanır, malik alacaklanır.
-  await postLedgerEntry(ctx, actor, {
-    propertyId: contract.propertyId,
-    contractId: contract._id,
-    personType: "tenant",
-    personId: contract.tenantId,
-    kind: "accrual",
-    amount: -rent,
-    description: `Kira tahakkuku — ${month.period}`,
-    date: month.dueDate,
-    referenceId,
-  });
-  await postLedgerEntry(ctx, actor, {
-    propertyId: contract.propertyId,
-    contractId: contract._id,
-    personType: "owner",
-    personId: contract.ownerId,
-    kind: "accrual",
-    amount: rent,
-    description: `Kira tahakkuku — ${month.period}`,
-    date: month.dueDate,
-    referenceId,
-  });
+  if (month.dueDate <= Date.now()) {
+    await postAccrualLedger(ctx, actor, contract, {
+      _id: accrualId,
+      period: month.period,
+      dueDate: month.dueDate,
+      amount: rent,
+    });
+  }
 
   return accrualId;
 };

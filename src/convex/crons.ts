@@ -1,5 +1,5 @@
 import { cronJobs } from "convex/server";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 
 const crons = cronJobs();
 
@@ -9,6 +9,15 @@ crons.cron(
   "daily-rent-reminders",
   "0 8 * * *",
   api.reminders.sendRentReminders,
+  {},
+);
+
+// Vadesi gelen tahakkukları cari hesaplara işler, vadesi gelmemiş
+// işlenmiş kayıtları temizler (vadesi gelmeyen borç cari hesaba yansımaz).
+crons.cron(
+  "daily-accrual-reconcile",
+  "30 8 * * *",
+  internal.accruals.reconcileAccrualLedgers,
   {},
 );
 

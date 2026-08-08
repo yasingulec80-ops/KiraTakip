@@ -1,9 +1,9 @@
 import { ConvexError, v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { getActor, getAuthorizedPropertyIds, requireActor, requirePropertyAccess, deleteLedgerForReference } from "./ledger_helpers";
-import { createAccrualWithLedger, periodKey } from "./ledger_ops";
+import { createAccrualWithLedger, periodKey, postAccrualLedger } from "./ledger_ops";
 
 /** Recompute an accrual's status from its linked collections. */
 export const refreshAccrualStatus = async (
@@ -23,6 +23,61 @@ export const refreshAccrualStatus = async (
   else status = "pending";
   await ctx.db.patch(accrual._id, { status });
 };
+
+/**
+ * Daily reconcile: post ledger entries for accruals that have become due,
+ * and remove entries for accruals whose due date has not arrived yet
+ * (vadesi gelmeyen borçlar cari hesaba işlenmez).
+ */
+export const reconcileAccrualLedgers = internalMutation({
+  handler: async (ctx) => {
+    const now = Date.now();
+    const accruals = await ctx.db.query("accruals").collect();
+
+    const entries = await ctx.db.query("ledgerEntries").collect();
+    const byReference = new Map<string, typeof entries>();
+    for (const e of entries) {
+      if (!e.referenceId) continue;
+      const list = byReference.get(e.referenceId) ?? [];
+      list.push(e);
+      byReference.set(e.referenceId, list);
+    }
+
+    let posted = 0;
+    let removed = 0;
+
+    for (const accrual of accruals) {
+      const contract = await ctx.db.get(accrual.contractId);
+      if (!contract) continue;
+
+      const refId = accrual._id.toString();
+      const accrualEntries = (byReference.get(refId) ?? []).filter(
+        (e) => e.kind === "accrual",
+      );
+
+      if (accrual.dueDate <= now) {
+        // Vadesi gelmiş: cari kayıt yoksa kiracı/malik hesabına işle.
+        if (accrualEntries.length === 0) {
+          await postAccrualLedger(ctx, null, contract, {
+            _id: accrual._id,
+            period: accrual.period,
+            dueDate: accrual.dueDate,
+            amount: accrual.amount,
+          });
+          posted += 1;
+        }
+      } else {
+        // Vadesi gelmemiş: varsa işlenmiş cari kayıtlarını kaldır.
+        for (const e of accrualEntries) {
+          await ctx.db.delete(e._id);
+          removed += 1;
+        }
+      }
+    }
+
+    return { posted, removed };
+  },
+});
 
 /** List accruals the user may see (property access). */
 export const list = query({

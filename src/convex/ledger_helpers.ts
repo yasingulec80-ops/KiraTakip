@@ -60,7 +60,7 @@ export interface LedgerPost {
 /** Insert a single ledger entry for a person. */
 export const postLedgerEntry = async (
   ctx: MutationCtx,
-  actor: Doc<"users">,
+  actor: Doc<"users"> | null,
   entry: LedgerPost & {
     propertyId?: Id<"properties">;
     contractId?: Id<"contracts">;
@@ -77,7 +77,7 @@ export const postLedgerEntry = async (
     description: entry.description,
     date: entry.date,
     referenceId: entry.referenceId,
-    createdBy: actor._id,
+    createdBy: actor?._id,
   });
 };
 
