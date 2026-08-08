@@ -550,7 +550,7 @@ function PersonDetailDialog({
 }) {
   const balance = entries.reduce((sum, e) => sum + e.amount, 0);
 
-  // Vekil hesabında devirler kira ve depozito olarak ayrı ayrı gösterilir.
+  // Vekil hesabında tahsilat ve devirler kira/depozito olarak ayrı ayrı gösterilir.
   const transfers = entries.filter((e) => e.kind === "transfer");
   const rentTransfers = transfers.filter(
     (e) => !e.description.includes("depozito"),
@@ -558,6 +558,19 @@ function PersonDetailDialog({
   const depositTransfers = transfers.filter((e) =>
     e.description.includes("depozito"),
   );
+  const vekilCollections = entries.filter(
+    (e) =>
+      e.kind === "collection" &&
+      e.description.startsWith("Vekil tahsilatı"),
+  );
+  const collectedRent = vekilCollections.filter(
+    (e) => !e.description.includes("depozito"),
+  );
+  const collectedDeposit = vekilCollections.filter((e) =>
+    e.description.includes("depozito"),
+  );
+  const hasVekilActivity =
+    transfers.length > 0 || vekilCollections.length > 0;
 
   return (
     <DialogShell
@@ -626,8 +639,30 @@ function PersonDetailDialog({
             </p>
           </div>
 
-          {transfers.length > 0 && (
-            <div className="grid gap-px border border-border bg-border sm:grid-cols-2">
+          {hasVekilActivity && (
+            <div className="grid gap-px border border-border bg-border sm:grid-cols-2 lg:grid-cols-4">
+              <div className="bg-card p-4">
+                <p className="eyebrow text-muted-foreground">Tahsil Edilen Kira</p>
+                <p className="mt-1.5 font-display text-lg font-light tabular-nums">
+                  {formatCurrency(
+                    collectedRent.reduce((s, e) => s + Math.abs(e.amount), 0),
+                  )}
+                </p>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  {collectedRent.length} tahsilat kaydı
+                </p>
+              </div>
+              <div className="bg-card p-4">
+                <p className="eyebrow text-muted-foreground">Tahsil Edilen Depozito</p>
+                <p className="mt-1.5 font-display text-lg font-light tabular-nums">
+                  {formatCurrency(
+                    collectedDeposit.reduce((s, e) => s + Math.abs(e.amount), 0),
+                  )}
+                </p>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  {collectedDeposit.length} tahsilat kaydı
+                </p>
+              </div>
               <div className="bg-card p-4">
                 <p className="eyebrow text-muted-foreground">Kira Devri</p>
                 <p className="mt-1.5 font-display text-lg font-light tabular-nums">
