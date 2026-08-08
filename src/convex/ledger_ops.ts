@@ -2,30 +2,11 @@ import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import type { ExpenseCategory } from "./schema";
 import { postLedgerEntry } from "./ledger_helpers";
+import { accrualPosts, contractMonths, expensePosts, periodKey } from "../lib/ledger-posts";
 
 type Contract = Doc<"contracts">;
 
-export const periodKey = (ts: number): string => {
-  const d = new Date(ts);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-};
-
-const addMonths = (ts: number, months: number): number => {
-  const d = new Date(ts);
-  return new Date(d.getFullYear(), d.getMonth() + months, 1).getTime();
-};
-
-/** Monthly accrual rows for the contract's full duration. */
-export const contractMonths = (
-  contract: Pick<Contract, "startDate" | "durationMonths">,
-): { period: string; dueDate: number }[] => {
-  const months: { period: string; dueDate: number }[] = [];
-  for (let i = 0; i < contract.durationMonths; i++) {
-    const dueDate = addMonths(contract.startDate, i);
-    months.push({ period: periodKey(dueDate), dueDate });
-  }
-  return months;
-};
+export { contractMonths, periodKey };
 
 /**
  * Post the tenant debit / owner credit pair for an accrual.
@@ -41,34 +22,21 @@ export const postAccrualLedger = async (
   type: "rent" | "deposit" = "rent",
 ) => {
   const referenceId = accrual._id.toString();
-  const label =
-    type === "deposit"
-      ? `Depozito tahakkuku — ${accrual.period}`
-      : `Kira tahakkuku — ${accrual.period}`;
 
-  // Kiracı borçlanır, malik alacaklanır.
-  await postLedgerEntry(ctx, actor, {
-    propertyId: contract.propertyId,
-    contractId: contract._id,
-    personType: "tenant",
-    personId: contract.tenantId,
-    kind: "accrual",
-    amount: -accrual.amount,
-    description: label,
-    date: accrual.dueDate,
-    referenceId,
-  });
-  await postLedgerEntry(ctx, actor, {
-    propertyId: contract.propertyId,
-    contractId: contract._id,
-    personType: "owner",
-    personId: contract.ownerId,
-    kind: "accrual",
-    amount: accrual.amount,
-    description: label,
-    date: accrual.dueDate,
-    referenceId,
-  });
+  // Kiracı borçlanır, malik alacaklanır (paylaşılan saf kural).
+  for (const post of accrualPosts(contract, accrual, type)) {
+    await postLedgerEntry(ctx, actor, {
+      propertyId: contract.propertyId,
+      contractId: contract._id,
+      personType: post.personType,
+      personId: post.personId as Id<"owners"> | Id<"tenants">,
+      kind: post.kind,
+      amount: post.amount,
+      description: post.description,
+      date: accrual.dueDate,
+      referenceId,
+    });
+  }
 };
 
 /**
@@ -290,53 +258,18 @@ export const createExpenseWithLedger = async (
     createdBy: actor._id,
   });
   const referenceId = expenseId.toString();
-  const label = `Masraf — ${args.description || args.category}`;
 
-  if (args.paidByType === "owner" && args.payerOwnerId) {
+  // Ödeyen sınıflandırması paylaşılan saf kuraldan gelir (owner/proxy/tenant).
+  for (const post of expensePosts(args)) {
     await postLedgerEntry(ctx, actor, {
       propertyId: args.propertyId,
       contractId: args.contractId,
-      personType: "owner",
-      personId: args.payerOwnerId,
-      kind: "expense",
-      amount: -args.amount,
-      description: label,
-      date: args.date,
-      referenceId,
-    });
-  } else if (args.paidByType === "proxy" && args.payerOwnerId) {
-    await postLedgerEntry(ctx, actor, {
-      propertyId: args.propertyId,
-      contractId: args.contractId,
-      personType: "proxy",
-      personId: args.payerOwnerId,
-      ownerId: args.payerOwnerId,
-      kind: "expense",
-      amount: args.amount,
-      description: label,
-      date: args.date,
-      referenceId,
-    });
-    await postLedgerEntry(ctx, actor, {
-      propertyId: args.propertyId,
-      contractId: args.contractId,
-      personType: "owner",
-      personId: args.payerOwnerId,
-      kind: "expense",
-      amount: -args.amount,
-      description: `${label} (vekil)`,
-      date: args.date,
-      referenceId,
-    });
-  } else if (args.paidByType === "tenant" && args.payerTenantId) {
-    await postLedgerEntry(ctx, actor, {
-      propertyId: args.propertyId,
-      contractId: args.contractId,
-      personType: "tenant",
-      personId: args.payerTenantId,
-      kind: "expense",
-      amount: args.amount,
-      description: label,
+      personType: post.personType,
+      personId: post.personId as Id<"owners"> | Id<"tenants">,
+      ownerId: post.ownerId as Id<"owners"> | undefined,
+      kind: post.kind,
+      amount: post.amount,
+      description: post.description,
       date: args.date,
       referenceId,
     });

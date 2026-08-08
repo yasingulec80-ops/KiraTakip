@@ -17,6 +17,7 @@ import {
   requireActor,
   requirePropertyAccess,
 } from "./ledger_helpers";
+import { depositAccrualDecision } from "../lib/ledger-posts";
 import {
   contractMonths,
   createAccrualWithLedger,
@@ -364,44 +365,54 @@ const syncDepositAccrual = async (
     (a) => (a.type ?? "rent") === "deposit",
   );
 
-  if (!depositAccrual && (contract.depositAmount ?? 0) > 0) {
+  // Karar paylaşılan saf kuraldan gelir (create / update / delete / none).
+  const decision = depositAccrualDecision(
+    contract.depositAmount ?? 0,
+    depositAccrual
+      ? { amount: depositAccrual.amount, dueDate: depositAccrual.dueDate }
+      : null,
+    contract.startDate,
+    Date.now(),
+  );
+
+  if (decision.action === "create") {
     await createAccrualWithLedger(
       ctx,
       actor,
       contract,
-      { period: periodKey(contract.startDate), dueDate: contract.startDate },
-      contract.depositAmount,
+      { period: decision.period, dueDate: decision.dueDate },
+      decision.amount,
       "deposit",
     );
     return;
   }
 
-  if (!depositAccrual) return;
-
-  if ((contract.depositAmount ?? 0) <= 0) {
+  if (decision.action === "delete") {
     // Depozito kaldırıldı: tahakkuk ve cari kayıtları temizle.
-    await deleteLedgerForReference(ctx, depositAccrual._id.toString());
-    await ctx.db.delete(depositAccrual._id);
+    if (depositAccrual) {
+      await deleteLedgerForReference(ctx, depositAccrual._id.toString());
+      await ctx.db.delete(depositAccrual._id);
+    }
     return;
   }
 
-  if (depositAccrual.amount !== contract.depositAmount) {
+  if (decision.action === "update" && depositAccrual) {
     await ctx.db.patch(depositAccrual._id, {
-      amount: contract.depositAmount,
-      dueDate: contract.startDate,
-      period: periodKey(contract.startDate),
+      amount: decision.amount,
+      dueDate: decision.dueDate,
+      period: decision.period,
     });
     await deleteLedgerForReference(ctx, depositAccrual._id.toString());
-    if (depositAccrual.dueDate <= Date.now() || contract.startDate <= Date.now()) {
+    if (decision.shouldPost) {
       await postAccrualLedger(
         ctx,
         actor,
         contract,
         {
           _id: depositAccrual._id,
-          period: periodKey(contract.startDate),
-          dueDate: contract.startDate,
-          amount: contract.depositAmount,
+          period: decision.period,
+          dueDate: decision.dueDate,
+          amount: decision.amount,
         },
         "deposit",
       );
