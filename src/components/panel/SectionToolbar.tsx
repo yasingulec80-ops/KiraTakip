@@ -11,6 +11,7 @@ import {
 
 export interface SectionToolbarProps {
   num: string;
+  eyebrow?: string;
   title: string;
   hint: string;
   count: number;
@@ -30,6 +31,7 @@ export interface SectionToolbarProps {
 
 export function SectionToolbar({
   num,
+  eyebrow,
   title,
   hint,
   count,
@@ -52,7 +54,7 @@ export function SectionToolbar({
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="eyebrow text-brand">Sekme {num}</p>
+          <p className="eyebrow text-brand">{eyebrow ?? `Sekme ${num}`}</p>
           <h2 className="mt-2 font-display text-2xl font-light tracking-tight md:text-3xl">
             {title}
           </h2>

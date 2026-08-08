@@ -146,6 +146,27 @@ export const remove = mutation({
   },
 });
 
+/** Mark a contract's deposit as returned, recording date and note. */
+export const returnDeposit = mutation({
+  args: {
+    contractId: v.id("contracts"),
+    date: v.number(),
+    note: v.optional(v.string()),
+  },
+  handler: async (ctx, { contractId, date, note }) => {
+    const actor = await requireActor(ctx);
+    const contract = await ctx.db.get(contractId);
+    if (!contract) throw new ConvexError("Kontrat bulunamadı.");
+    await requirePropertyAccess(ctx, actor, contract.propertyId);
+    await ctx.db.patch(contractId, {
+      depositStatus: "returned" as const,
+      depositReturnedAt: date,
+      depositNote: note,
+    });
+    return true;
+  },
+});
+
 /** Generate missing monthly accruals for a contract (idempotent). */
 const generateMissingAccruals = async (
   ctx: MutationCtx,

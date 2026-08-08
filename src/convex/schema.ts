@@ -168,6 +168,8 @@ const schema = defineSchema(
       rentAmount: v.number(), // Aylık kira
       depositAmount: v.number(), // Depozito
       depositStatus: v.optional(depositStatusValidator), // Depozito durumu
+      depositReturnedAt: v.optional(v.number()), // İade tarihi (ms)
+      depositNote: v.optional(v.string()), // İade notu
       fixtures: v.optional(v.array(fixtureValidator)), // Kontrat bazlı demirbaşlar
       notes: v.optional(v.string()),
       signedContractStorageId: v.optional(v.id("_storage")), // İmzalı kontrat

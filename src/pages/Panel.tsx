@@ -6,6 +6,7 @@ import { OwnerSection } from "@/components/panel/OwnerSection";
 import { PropertySection } from "@/components/panel/PropertySection";
 import { TenantSection } from "@/components/panel/TenantSection";
 import { ContractSection } from "@/components/panel/ContractSection";
+import { DepositSection } from "@/components/panel/DepositSection";
 import { AccrualSection } from "@/components/panel/AccrualSection";
 import { CollectionSection } from "@/components/panel/CollectionSection";
 import { ExpenseSection } from "@/components/panel/ExpenseSection";
@@ -33,9 +34,10 @@ type TabId =
   | "collections"
   | "expenses"
   | "ledgers"
+  | "deposits"
   | "users";
 
-const TABS: { id: TabId; num: number; label: string }[] = [
+const TABS: { id: TabId; num?: number; label: string }[] = [
   { id: "properties", num: 1, label: "Gayrimenkuller" },
   { id: "owners", num: 2, label: "Malikler" },
   { id: "tenants", num: 3, label: "Kiracılar" },
@@ -44,6 +46,7 @@ const TABS: { id: TabId; num: number; label: string }[] = [
   { id: "collections", num: 6, label: "Tahsilatlar" },
   { id: "expenses", num: 7, label: "Masraflar" },
   { id: "ledgers", num: 8, label: "Cari Hesaplar" },
+  { id: "deposits", label: "Depozitolar" },
 ];
 
 const VALID_TABS = new Set<string>(TABS.map((t) => t.id).concat("users"));
@@ -155,7 +158,7 @@ export default function Panel() {
     const tabFor: Record<string, TabId> = {
       properties: "properties",
       contracts: "contracts",
-      deposits: "contracts",
+      deposits: "deposits",
       pendingRents: "accruals",
       collectedRents: "collections",
       owners: "owners",
@@ -295,16 +298,18 @@ export default function Panel() {
                       : "border-transparent text-muted-foreground hover:border-foreground/30 hover:text-foreground",
                   )}
                 >
-                  <span
-                    className={cn(
-                      "font-display text-xs",
-                      active
-                        ? "text-brand"
-                        : "text-muted-foreground/60 group-hover:text-foreground/70",
-                    )}
-                  >
-                    {String(tab.num).padStart(2, "0")}
-                  </span>
+                  {tab.num !== undefined && (
+                    <span
+                      className={cn(
+                        "font-display text-xs",
+                        active
+                          ? "text-brand"
+                          : "text-muted-foreground/60 group-hover:text-foreground/70",
+                      )}
+                    >
+                      {String(tab.num).padStart(2, "0")}
+                    </span>
+                  )}
                   {tab.label}
                 </button>
               );
@@ -320,6 +325,7 @@ export default function Panel() {
             {activeTab === "collections" && <CollectionSection />}
             {activeTab === "expenses" && <ExpenseSection />}
             {activeTab === "ledgers" && <LedgerSection />}
+            {activeTab === "deposits" && <DepositSection />}
             {activeTab === "users" && isAdmin && <UsersSection />}
             {activeTab === "users" && !isAdmin && <PropertySection />}
           </div>

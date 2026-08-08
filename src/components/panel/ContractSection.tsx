@@ -949,6 +949,23 @@ function ContractDetailDialog({
               </span>
             }
           />
+          {contract.depositStatus === "returned" && (
+            <DetailRow
+              label="Depozito İadesi"
+              value={
+                <span>
+                  {contract.depositReturnedAt
+                    ? formatDate(contract.depositReturnedAt)
+                    : "—"}
+                  {contract.depositNote && (
+                    <span className="ml-2 text-xs text-muted-foreground">
+                      {contract.depositNote}
+                    </span>
+                  )}
+                </span>
+              }
+            />
+          )}
           <DetailRow
             label="Tahakkuklar"
             value={
