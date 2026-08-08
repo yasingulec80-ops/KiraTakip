@@ -1702,7 +1702,7 @@ function buildContractHtml(
 
         ${
           contract.notes
-            ? `<h2>MADDE 7 — ÖZEL HÜKÜMLER</h2><p class="clause">${esc(contract.notes)}</p>`
+            ? `<h2>ÖZEL HÜKÜMLER</h2><p class="clause">${esc(contract.notes)}</p>`
             : ""
         }
 
