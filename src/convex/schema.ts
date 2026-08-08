@@ -173,6 +173,10 @@ const schema = defineSchema(
       depositStatus: v.optional(depositStatusValidator), // Depozito durumu
       depositReturnedAt: v.optional(v.number()), // İade tarihi (ms)
       depositNote: v.optional(v.string()), // İade notu
+      guarantor: v.optional(guarantorValidator), // Kefil (kontrat bazlı)
+      evictionCommitment: v.optional(v.boolean()), // Tahliye taahhütnamesi eklensin mi
+      evictionCommitmentDate: v.optional(v.number()), // Taahhüt tarihi (ms)
+      evictionDate: v.optional(v.number()), // Tahliye tarihi (ms)
       fixtures: v.optional(v.array(fixtureValidator)), // Kontrat bazlı demirbaşlar
       notes: v.optional(v.string()),
       signedContractStorageId: v.optional(v.id("_storage")), // İmzalı kontrat

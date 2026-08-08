@@ -1,12 +1,13 @@
 import { ConvexError, v } from "convex/values";
 import { action, mutation, query } from "./_generated/server";
-import type { Doc, Id } from "./_generated/dataModel";
+import type { Doc } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import {
   ROLES,
   contractStatusValidator,
   depositStatusValidator,
   fixtureValidator,
+  guarantorValidator,
 } from "./schema";
 import {
   getActor,
@@ -30,6 +31,10 @@ const contractArgs = {
   depositAmount: v.number(),
   depositMonths: v.optional(v.number()),
   depositStatus: v.optional(depositStatusValidator),
+  guarantor: v.optional(guarantorValidator),
+  evictionCommitment: v.optional(v.boolean()),
+  evictionCommitmentDate: v.optional(v.number()),
+  evictionDate: v.optional(v.number()),
   fixtures: v.optional(v.array(fixtureValidator)),
   notes: v.optional(v.string()),
   status: v.optional(contractStatusValidator),
@@ -98,6 +103,10 @@ export const update = mutation({
       depositAmount: data.depositAmount,
       depositMonths: data.depositMonths,
       depositStatus: data.depositStatus,
+      guarantor: data.guarantor,
+      evictionCommitment: data.evictionCommitment,
+      evictionCommitmentDate: data.evictionCommitmentDate,
+      evictionDate: data.evictionDate,
       fixtures: data.fixtures ?? [],
       notes: data.notes,
       status: data.status ?? "active",

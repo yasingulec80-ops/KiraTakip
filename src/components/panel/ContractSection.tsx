@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
 import {
@@ -81,6 +82,14 @@ interface ContractFormState {
   depositMonths: string;
   depositStatus: "paid" | "held" | "returned";
   status: "active" | "ended";
+  guarantorName: string;
+  guarantorTc: string;
+  guarantorPhone: string;
+  guarantorAddress: string;
+  guarantorEmail: string;
+  evictionCommitment: boolean;
+  evictionCommitmentDate: string;
+  evictionDate: string;
   fixtures: FixtureDraft[];
   notes: string;
 }
@@ -96,6 +105,14 @@ const emptyForm: ContractFormState = {
   depositMonths: "0",
   depositStatus: "paid",
   status: "active",
+  guarantorName: "",
+  guarantorTc: "",
+  guarantorPhone: "",
+  guarantorAddress: "",
+  guarantorEmail: "",
+  evictionCommitment: false,
+  evictionCommitmentDate: "",
+  evictionDate: "",
   fixtures: [],
   notes: "",
 };
@@ -111,6 +128,16 @@ const formFromContract = (c: Contract): ContractFormState => ({
   depositMonths: c.depositMonths ? String(c.depositMonths) : "0",
   depositStatus: c.depositStatus ?? "paid",
   status: c.status ?? "active",
+  guarantorName: c.guarantor?.name ?? "",
+  guarantorTc: c.guarantor?.tcNo ?? "",
+  guarantorPhone: c.guarantor?.phone ?? "",
+  guarantorAddress: c.guarantor?.address ?? "",
+  guarantorEmail: c.guarantor?.email ?? "",
+  evictionCommitment: c.evictionCommitment === true,
+  evictionCommitmentDate: c.evictionCommitmentDate
+    ? dateToInput(c.evictionCommitmentDate)
+    : "",
+  evictionDate: c.evictionDate ? dateToInput(c.evictionDate) : "",
   fixtures: (c.fixtures ?? []).map((f) => ({
     name: f.name,
     quantity: String(f.quantity),
@@ -271,6 +298,13 @@ export function ContractSection() {
   };
 
   const handleSave = async (form: ContractFormState) => {
+    const hasGuarantor = [
+      form.guarantorName,
+      form.guarantorTc,
+      form.guarantorPhone,
+      form.guarantorAddress,
+      form.guarantorEmail,
+    ].some((v) => v.trim() !== "");
     const payload = {
       propertyId: form.propertyId as Id<"properties">,
       ownerId: form.ownerId as Id<"owners">,
@@ -285,6 +319,24 @@ export function ContractSection() {
           : undefined,
       depositStatus: form.depositStatus,
       status: form.status,
+      guarantor: hasGuarantor
+        ? {
+            name: form.guarantorName.trim(),
+            tcNo: form.guarantorTc.trim(),
+            phone: form.guarantorPhone.trim(),
+            address: form.guarantorAddress.trim(),
+            email: form.guarantorEmail.trim(),
+          }
+        : undefined,
+      evictionCommitment: form.evictionCommitment,
+      evictionCommitmentDate:
+        form.evictionCommitment && form.evictionCommitmentDate !== ""
+          ? parseDateInput(form.evictionCommitmentDate)
+          : undefined,
+      evictionDate:
+        form.evictionCommitment && form.evictionDate !== ""
+          ? parseDateInput(form.evictionDate)
+          : undefined,
       fixtures: form.fixtures
         .filter((f) => f.name.trim() !== "")
         .map((f) => ({
@@ -315,6 +367,10 @@ export function ContractSection() {
         depositAmount: payload.depositAmount,
         depositMonths: payload.depositMonths,
         depositStatus: payload.depositStatus,
+        guarantor: payload.guarantor,
+        evictionCommitment: payload.evictionCommitment,
+        evictionCommitmentDate: payload.evictionCommitmentDate,
+        evictionDate: payload.evictionDate,
         fixtures: payload.fixtures,
         notes: payload.notes,
       });
@@ -659,6 +715,10 @@ function ContractFormDialog({
       setError("Aylık kira geçerli bir tutar olmalıdır.");
       return;
     }
+    if (form.evictionCommitment && form.evictionDate === "") {
+      setError("Tahliye taahhütnamesi için tahliye tarihi zorunludur.");
+      return;
+    }
     onSave(form);
   };
 
@@ -731,7 +791,26 @@ function ContractFormDialog({
         </Row>
 
         <Field label="Kiracı" required>
-          <Select value={form.tenantId} onValueChange={(value) => set("tenantId", value)}>
+          <Select
+            value={form.tenantId}
+            onValueChange={(value) => {
+              const tenant = tenants.find((t) => t._id.toString() === value);
+              setForm((f) => {
+                // Kefil alanları boşsa kiracının kayıtlı kefiliyle otomatik doldur.
+                const g = tenant?.guarantor;
+                const empty = f.guarantorName.trim() === "";
+                return {
+                  ...f,
+                  tenantId: value,
+                  guarantorName: empty && g ? g.name : f.guarantorName,
+                  guarantorTc: empty && g ? g.tcNo : f.guarantorTc,
+                  guarantorPhone: empty && g ? g.phone : f.guarantorPhone,
+                  guarantorAddress: empty && g ? g.address : f.guarantorAddress,
+                  guarantorEmail: empty && g ? g.email : f.guarantorEmail,
+                };
+              });
+            }}
+          >
             <SelectTrigger className="rounded-none">
               <SelectValue placeholder="Kiracı seçin" />
             </SelectTrigger>
@@ -744,6 +823,61 @@ function ContractFormDialog({
             </SelectContent>
           </Select>
         </Field>
+
+        {/* Kefil — isteğe bağlı */}
+        <div className="space-y-3 border border-border bg-muted/30 p-4">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+              Kefil Bilgileri
+            </span>
+            <span className="text-[11px] text-muted-foreground">isteğe bağlı</span>
+          </div>
+          <Row>
+            <Field label="Adı Soyadı">
+              <Input
+                value={form.guarantorName}
+                onChange={(e) => set("guarantorName", e.target.value)}
+                placeholder="Kefilin adı soyadı"
+                className="rounded-none"
+              />
+            </Field>
+            <Field label="TC Kimlik Numarası">
+              <Input
+                value={form.guarantorTc}
+                onChange={(e) => set("guarantorTc", e.target.value)}
+                placeholder="11122233344"
+                className="rounded-none"
+              />
+            </Field>
+          </Row>
+          <Row>
+            <Field label="Telefon Numarası">
+              <Input
+                value={form.guarantorPhone}
+                onChange={(e) => set("guarantorPhone", e.target.value)}
+                placeholder="05xx xxx xx xx"
+                className="rounded-none"
+              />
+            </Field>
+            <Field label="Mail Adresi">
+              <Input
+                type="email"
+                value={form.guarantorEmail}
+                onChange={(e) => set("guarantorEmail", e.target.value)}
+                placeholder="kefil@eposta.com"
+                className="rounded-none"
+              />
+            </Field>
+          </Row>
+          <Field label="Adresi">
+            <Input
+              value={form.guarantorAddress}
+              onChange={(e) => set("guarantorAddress", e.target.value)}
+              placeholder="Kefilin adresi"
+              className="rounded-none"
+            />
+          </Field>
+        </div>
 
         <Row cols={3}>
           <Field label="Başlangıç Tarihi" required>
@@ -824,6 +958,59 @@ function ContractFormDialog({
             </Select>
           </Field>
         </Row>
+
+        {/* Tahliye taahhütnamesi — isteğe bağlı */}
+        <div className="space-y-3 border border-border p-4">
+          <label className="flex cursor-pointer items-start gap-3">
+            <Checkbox
+              className="mt-0.5"
+              checked={form.evictionCommitment}
+              onCheckedChange={(checked) =>
+                setForm((f) => ({
+                  ...f,
+                  evictionCommitment: checked === true,
+                  evictionCommitmentDate:
+                    checked === true && f.evictionCommitmentDate === ""
+                      ? f.startDate
+                      : f.evictionCommitmentDate,
+                }))
+              }
+            />
+            <span>
+              <span className="block text-sm font-medium">
+                Tahliye Taahhütnamesi
+              </span>
+              <span className="block text-xs leading-5 text-muted-foreground">
+                İşaretlenirse kontrat belgesine otomatik tahliye taahhütnamesi
+                eklenir; taahhüt ve tahliye tarihleri belirtilir.
+              </span>
+            </span>
+          </label>
+          {form.evictionCommitment && (
+            <Row>
+              <Field label="Taahhüt Tarihi" required>
+                <Input
+                  type="date"
+                  value={form.evictionCommitmentDate}
+                  onChange={(e) => set("evictionCommitmentDate", e.target.value)}
+                  className="rounded-none"
+                />
+              </Field>
+              <Field
+                label="Tahliye Tarihi"
+                required
+                hint="taahhüt edilen boşaltma tarihi"
+              >
+                <Input
+                  type="date"
+                  value={form.evictionDate}
+                  onChange={(e) => set("evictionDate", e.target.value)}
+                  className="rounded-none"
+                />
+              </Field>
+            </Row>
+          )}
+        </div>
 
         {editing && (
           <Field label="Kontrat Durumu">
@@ -1050,6 +1237,21 @@ function ContractDetailDialog({
             }
           />
           <DetailRow
+            label="Kefil"
+            value={
+              contract.guarantor ? (
+                <span>
+                  {contract.guarantor.name}
+                  <span className="ml-2 text-xs text-muted-foreground">
+                    {contract.guarantor.phone}
+                  </span>
+                </span>
+              ) : (
+                undefined
+              )
+            }
+          />
+          <DetailRow
             label="Dönem"
             value={`${formatDate(contract.startDate)} → ${formatDate(
               contractEnd(contract.startDate, contract.durationMonths),
@@ -1088,6 +1290,23 @@ function ContractDetailDialog({
                       {contract.depositNote}
                     </span>
                   )}
+                </span>
+              }
+            />
+          )}
+          {contract.evictionCommitment && (
+            <DetailRow
+              label="Tahliye Taahhüdü"
+              value={
+                <span>
+                  Taahhüt:{" "}
+                  {contract.evictionCommitmentDate
+                    ? formatDate(contract.evictionCommitmentDate)
+                    : "—"}{" "}
+                  · Tahliye:{" "}
+                  {contract.evictionDate
+                    ? formatDate(contract.evictionDate)
+                    : "—"}
                 </span>
               }
             />
@@ -1233,6 +1452,10 @@ type ContractDocData = Pick<
   | "depositAmount"
   | "depositMonths"
   | "depositStatus"
+  | "guarantor"
+  | "evictionCommitment"
+  | "evictionCommitmentDate"
+  | "evictionDate"
   | "fixtures"
   | "notes"
 >;
@@ -1287,6 +1510,18 @@ const CONTRACT_STYLES = `
   .cont { font-weight: 400; text-transform: none; letter-spacing: 0; color: #6b6358; font-size: 11px; }
   .clause { margin: 0 0 8px; text-align: justify; }
   .closing { margin-top: 22px; }
+  .conditions { font-size: 11.8px; }
+  .conditions p { margin: 0 0 5px; text-align: justify; }
+  .signature .name .sub {
+    display: block; margin-top: 2px; font-size: 10px; font-weight: 400;
+    letter-spacing: 0.02em; text-transform: none; color: #6b6358;
+  }
+  .taahhut-box {
+    border: 1px solid #d8d1c4;
+    padding: 14px 16px;
+    margin-top: 18px;
+  }
+  .taahhut-box .field-row:last-child { border-bottom: none; }
   .field-row {
     display: flex; justify-content: space-between; gap: 24px;
     border-bottom: 1px solid #e3ddd2; padding: 5px 0;
@@ -1346,15 +1581,25 @@ function buildContractHtml(
   const fieldRow = (label: string, value: string) =>
     `<div class="field-row"><span class="field-label">${esc(label)}</span><span>${esc(value)}</span></div>`;
 
-  const TOTAL_PAGES = 3;
+  const kefil = contract.guarantor ?? tenant?.guarantor ?? null;
+  const hasEviction = contract.evictionCommitment === true;
+  const TOTAL_PAGES = hasEviction ? 4 : 3;
 
   /** Her sayfanın altına imza alanları — isimler otomatik doldurulur. */
   const signatures = (page: number) => {
-    const sig = (role: string, name?: string) =>
-      `<div class="signature"><div class="line"></div><div class="name">${esc(role)}<span>${esc(name ?? "—")}</span></div></div>`;
-    return `<div class="signatures">${sig("Kiracı", tenant?.name)}${
-      owner?.proxy ? sig("Vekil", owner.proxy.name) : ""
-    }${sig("Malik", owner?.name)}</div>
+    const sig = (role: string, name?: string, sub?: string) =>
+      `<div class="signature"><div class="line"></div><div class="name">${esc(role)}<span>${esc(name ?? "—")}</span>${
+        sub ? `<span class="sub">${esc(sub)}</span>` : ""
+      }</div></div>`;
+    return `<div class="signatures">
+      ${sig("Kiracı", tenant?.name)}
+      ${kefil ? sig("Kefil", kefil.name) : ""}
+      ${
+        owner?.proxy
+          ? sig("Kiraya Veren Adına Vekaleten", owner.proxy.name, owner.name)
+          : sig("Kiraya Veren", owner?.name)
+      }
+    </div>
     <div class="page-foot">Sayfa ${page} / ${TOTAL_PAGES}</div>`;
   };
 
@@ -1377,12 +1622,22 @@ function buildContractHtml(
           ${fieldRow("Telefon", tenant?.phone ?? "—")}
           ${fieldRow("Adres", tenant?.address ?? "—")}
           ${fieldRow("E-posta", tenant?.email ?? "—")}
-          ${fieldRow("Malik", owner?.name ?? "—")}
+          ${fieldRow("Kiraya Veren", owner?.name ?? "—")}
           ${fieldRow("TC Kimlik No", owner?.tcNo ?? "—")}
           ${fieldRow("Telefon", owner?.phone ?? "—")}
           ${
             owner?.proxy
-              ? fieldRow("Vekil", `${owner.proxy.name} (${owner.proxy.tcNo} · ${owner.proxy.phone})`)
+              ? fieldRow("Vekil (Adına Vekaleten)", `${owner.proxy.name} (${owner.proxy.tcNo} · ${owner.proxy.phone})`)
+              : ""
+          }
+          ${
+            kefil
+              ? `
+          ${fieldRow("Kefil", kefil.name)}
+          ${fieldRow("TC Kimlik No", kefil.tcNo ?? "—")}
+          ${fieldRow("Telefon", kefil.phone ?? "—")}
+          ${fieldRow("Adres", kefil.address ?? "—")}
+          ${fieldRow("E-posta", kefil.email ?? "—")}`
               : ""
           }
         </div>
@@ -1404,6 +1659,13 @@ function buildContractHtml(
 
         <h2>MADDE 4 — KİRA BEDELİ</h2>
         <p class="clause">Kiracı, kira bedelini her ayın başında ödemekle yükümlüdür. Aylık kira bedeli ${esc(tl(contract.rentAmount))} olarak belirlenmiştir.</p>
+
+        <h2>MADDE 5 — DEPOZİTO</h2>
+        <p class="clause">Depozito tutarı ${esc(tl(contract.depositAmount))} olup durumu: ${esc(depositStatus)}. ${
+          contract.depositMonths
+            ? `Depozito, ${esc(String(contract.depositMonths))} aylık kira bedeli karşılığıdır (aylık kira ${esc(tl(contract.rentAmount))} × ${esc(String(contract.depositMonths))} ay = ${esc(tl(contract.rentAmount * contract.depositMonths))}). `
+            : ""
+        }Depozito, kontrat sona erdiğinde ve gayrimenkulün boşaltılmış olduğu tespit edildiğinde iade edilir.</p>
       </div>
       ${signatures(1)}
     </div>`;
@@ -1413,20 +1675,15 @@ function buildContractHtml(
       <div class="content">
         ${runningHead}
 
-        <h2>MADDE 5 — DEPOZİTO</h2>
-        <p class="clause">Depozito tutarı ${esc(tl(contract.depositAmount))} olup durumu: ${esc(depositStatus)}. ${
-          contract.depositMonths
-            ? `Depozito, ${esc(String(contract.depositMonths))} aylık kira bedeli karşılığıdır (aylık kira ${esc(tl(contract.rentAmount))} × ${esc(String(contract.depositMonths))} ay = ${esc(tl(contract.rentAmount * contract.depositMonths))}). `
-            : ""
-        }Depozito, kontrat sona erdiğinde ve gayrimenkulün boşaltılmış olduğu tespit edildiğinde iade edilir.</p>
-
         <h2>MADDE 6 — DEMİRBAŞLAR</h2>
         <p class="clause">${esc(fixtureList)}</p>
 
         <h2>MADDE 7 — GENEL KOŞULLAR</h2>
-        ${GENERAL_CONDITIONS.slice(0, 9)
-          .map((c, i) => `<p class="clause">${i + 1}. ${esc(c)}</p>`)
-          .join("\n        ")}
+        <div class="conditions">
+          ${GENERAL_CONDITIONS.map(
+            (c, i) => `<p>${i + 1}. ${esc(c)}</p>`,
+          ).join("\n          ")}
+        </div>
       </div>
       ${signatures(2)}
     </div>`;
@@ -1435,11 +1692,6 @@ function buildContractHtml(
     <div class="page">
       <div class="content">
         ${runningHead}
-
-        <h2>MADDE 7 — GENEL KOŞULLAR <span class="cont">(devamı)</span></h2>
-        ${GENERAL_CONDITIONS.slice(9)
-          .map((c, i) => `<p class="clause">${i + 10}. ${esc(c)}</p>`)
-          .join("\n        ")}
 
         ${
           contract.notes
@@ -1453,6 +1705,47 @@ function buildContractHtml(
       ${signatures(3)}
     </div>`;
 
+  // Tahliye taahhütnamesi — ayrı sayfa (yalnızca evictionCommitment seçiliyse).
+  const page4 = hasEviction
+    ? `
+    <div class="page">
+      <div class="content">
+        <div class="doc-head">
+          <h1>TAHLİYE TAAHHÜTNAMESİ</h1>
+          <div class="meta">Kira Takip · Gayrimenkul Yönetim Paneli</div>
+        </div>
+        <p class="clause">Ben, aşağıda kimlik bilgileri yazılı kiracı ${esc(tenant?.name ?? "—")}${
+          tenant?.tcNo ? ` (TC Kimlik No: ${esc(tenant.tcNo)})` : ""
+        }; ${esc(property?.name ?? "—")} adresindeki taşınmazı, ${esc(
+          contract.evictionDate ? formatDate(contract.evictionDate) : "—",
+        )} tarihinde, herhangi bir ihtara gerek kalmaksızın, aynen ve tahliye edilmiş olarak boşaltmayı ve kiraya verene teslim etmeyi kabul ve taahhüt ederim.</p>
+        <p class="clause">İşbu tahliye taahhütnamesi, 6098 sayılı Türk Borçlar Kanunu'nun 352. maddesi uyarınca düzenlenmiş olup imza tarihinden itibaren geçerlidir. Taahhüt edilen tarihte tahliye gerçekleşmediği takdirde kiraya verenin yasal hakları saklıdır.</p>
+
+        <div class="taahhut-box">
+          <div class="field-row"><span class="field-label">Taahhüt Tarihi</span><span>${esc(
+            contract.evictionCommitmentDate
+              ? formatDate(contract.evictionCommitmentDate)
+              : "—",
+          )}</span></div>
+          <div class="field-row"><span class="field-label">Tahliye Tarihi</span><span>${esc(
+            contract.evictionDate ? formatDate(contract.evictionDate) : "—",
+          )}</span></div>
+          <div class="field-row"><span class="field-label">Kiracı</span><span>${esc(tenant?.name ?? "—")}</span></div>
+          <div class="field-row"><span class="field-label">Kiralanan</span><span>${esc(property?.name ?? "—")}</span></div>
+        </div>
+      </div>
+      <div class="signatures">
+        <div class="signature"><div class="line"></div><div class="name">Kiracı<span>${esc(tenant?.name ?? "—")}</span></div></div>
+        ${
+          owner?.proxy
+            ? `<div class="signature"><div class="line"></div><div class="name">Kiraya Veren Adına Vekaleten<span>${esc(owner.proxy.name)}</span><span class="sub">${esc(owner.name)}</span></div></div>`
+            : `<div class="signature"><div class="line"></div><div class="name">Kiraya Veren<span>${esc(owner?.name ?? "—")}</span></div></div>`
+        }
+      </div>
+      <div class="page-foot">Sayfa ${TOTAL_PAGES} / ${TOTAL_PAGES}</div>
+    </div>`
+    : "";
+
   return `<!doctype html>
 <html lang="tr">
 <head>
@@ -1464,6 +1757,7 @@ function buildContractHtml(
 ${page1}
 ${page2}
 ${page3}
+${page4}
 </body>
 </html>`;
 }
