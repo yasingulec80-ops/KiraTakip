@@ -142,16 +142,28 @@ export const seedDemoData = mutation({
     const accrualId = julyAccrual?._id ?? accruals[0]?._id;
 
     if (accrualId) {
+      // Kira tahsilatı — tahsilatı vekil (Mehmet Kaya) yaptı → vekilin cari hesabına borç işlenir.
       await createCollectionWithLedger(ctx, actor, contract, {
         accrualId,
         amount: rentAmount,
         date: at(2026, 8, 3),
         paidByType: "tenant",
         tenantId,
-        notes: "Ağustos kira ödemesi (deneme)",
+        collectedByProxyOwnerId: ownerId,
+        notes: "Ağustos kira ödemesi (vekil tahsil etti)",
       });
       await refreshAccrualStatus(ctx, accrualId);
     }
+
+    // Depozito tahsilatı — kiracı öder, cari hesaplara işlenir.
+    await createCollectionWithLedger(ctx, actor, contract, {
+      amount: contract.depositAmount,
+      date: at(2026, 7, 1),
+      paidByType: "tenant",
+      tenantId,
+      collectionType: "deposit",
+      notes: "Depozito tahsilatı (deneme)",
+    });
 
     /* ----------------------------- Masraflar --------------------------- */
     // Aidat — malik ödedi → malik borçlanır.
@@ -198,7 +210,7 @@ export const seedDemoData = mutation({
       propertyId,
       contractId,
       accruals: accruals.length,
-      collections: 1,
+      collections: 2,
       expenses: 3,
       ledgerEntries: ledgerCount,
     };

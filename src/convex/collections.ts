@@ -25,8 +25,12 @@ export const create = mutation({
     amount: v.number(),
     date: v.number(),
     paidByType: v.optional(v.union(v.literal("tenant"), v.literal("proxy"))),
+    collectionType: v.optional(
+      v.union(v.literal("rent"), v.literal("deposit")),
+    ),
     tenantId: v.optional(v.id("tenants")),
     proxyOwnerId: v.optional(v.id("owners")),
+    collectedByProxyOwnerId: v.optional(v.id("owners")),
     notes: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -35,9 +39,12 @@ export const create = mutation({
     if (!contract) throw new ConvexError("Kontrat bulunamadı.");
     await requirePropertyAccess(ctx, actor, contract.propertyId);
 
-    // Accrual seçilmezse en eski ödenmemiş tahakkuka otomatik bağlanır.
+    const collectionType = args.collectionType ?? "rent";
+
+    // Depozito tahsilatı tahakkuka bağlanmaz; kira tahsilatında tahakkuk
+    // seçilmezse en eski ödenmemiş tahakkuka otomatik bağlanır.
     let accrualId = args.accrualId;
-    if (!accrualId) {
+    if (collectionType === "rent" && !accrualId) {
       const accruals = await ctx.db
         .query("accruals")
         .withIndex("by_contract", (q) => q.eq("contractId", contract._id))
@@ -62,8 +69,10 @@ export const create = mutation({
       amount: args.amount,
       date: args.date,
       paidByType: args.paidByType ?? "tenant",
+      collectionType,
       tenantId: args.tenantId,
       proxyOwnerId: args.proxyOwnerId,
+      collectedByProxyOwnerId: args.collectedByProxyOwnerId,
       notes: args.notes,
     });
 

@@ -59,10 +59,17 @@ const CSV_HEADERS = [
   "Gayrimenkul",
   "Kiracı",
   "Dönem",
+  "Tür",
   "Ödeyen",
+  "Tahsil Eden",
   "Tutar",
   "Not",
 ];
+
+const COLLECTION_TYPE_LABEL: Record<string, string> = {
+  rent: "Kira",
+  deposit: "Depozito",
+};
 
 export function CollectionSection() {
   const { user } = useAuth();
@@ -156,6 +163,14 @@ export function CollectionSection() {
     return tenant?.name ?? "Kiracı";
   };
 
+  const collectedByLabel = (c: Collection): string => {
+    if (c.collectedByProxyOwnerId) {
+      const owner = ownerMap.get(c.collectedByProxyOwnerId.toString());
+      return owner?.proxy?.name ?? owner?.name ?? "Vekil";
+    }
+    return "Ofis";
+  };
+
   const rows = (c: Collection): (string | number | null)[] => {
     const contract = contractMap.get(c.contractId.toString());
     const property = contract
@@ -170,7 +185,9 @@ export function CollectionSection() {
       property?.name ?? "—",
       tenant?.name ?? "—",
       accrual?.period ?? "—",
+      COLLECTION_TYPE_LABEL[c.collectionType ?? "rent"],
       payerLabel(c),
+      collectedByLabel(c),
       c.amount,
       c.notes ?? "",
     ];
@@ -206,6 +223,7 @@ export function CollectionSection() {
         amount,
         date,
         paidByType: form.paidByType,
+        collectionType: form.collectionType,
         tenantId:
           form.paidByType === "tenant"
             ? (form.personId as Id<"tenants">)
@@ -214,6 +232,9 @@ export function CollectionSection() {
           form.paidByType === "proxy"
             ? (form.personId as Id<"owners">)
             : undefined,
+        collectedByProxyOwnerId: form.collectedByProxyOwnerId
+          ? (form.collectedByProxyOwnerId as Id<"owners">)
+          : undefined,
         notes: form.notes.trim() || undefined,
       });
       toast.success("Tahsilat işlendi ve cari hesaba kaydedildi.");
@@ -285,7 +306,9 @@ export function CollectionSection() {
                   <TableHead>Gayrimenkul</TableHead>
                   <TableHead>Kiracı</TableHead>
                   <TableHead>Dönem</TableHead>
+                  <TableHead>Tür</TableHead>
                   <TableHead>Ödeyen</TableHead>
+                  <TableHead>Tahsil Eden</TableHead>
                   <TableHead>Not</TableHead>
                   <TableHead className="text-right">Tutar</TableHead>
                   <TableHead className="text-right">Eylemler</TableHead>
@@ -317,11 +340,29 @@ export function CollectionSection() {
                           <span className="text-sm text-muted-foreground">—</span>
                         )}
                       </TableCell>
+                      <TableCell>
+                        {(c.collectionType ?? "rent") === "deposit" ? (
+                          <Badge className="rounded-none bg-muted text-muted-foreground">
+                            Depozito
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="rounded-none text-muted-foreground">
+                            Kira
+                          </Badge>
+                        )}
+                      </TableCell>
                       <TableCell className="text-sm">
                         {c.paidByType === "proxy" ? (
                           <span className="text-brand">{payerLabel(c)}</span>
                         ) : (
                           payerLabel(c)
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {c.collectedByProxyOwnerId ? (
+                          <span className="font-medium">{collectedByLabel(c)}</span>
+                        ) : (
+                          <span className="text-muted-foreground">Ofis</span>
                         )}
                       </TableCell>
                       <TableCell className="max-w-40 truncate text-sm text-muted-foreground">
@@ -409,6 +450,8 @@ interface CollectionFormState {
   amount: string;
   date: string;
   paidByType: "tenant" | "proxy";
+  collectionType: "rent" | "deposit";
+  collectedByProxyOwnerId: string;
   personId: string;
   notes: string;
 }
@@ -438,6 +481,8 @@ function CollectionFormDialog({
     amount: "",
     date: TODAY,
     paidByType: "tenant",
+    collectionType: "rent",
+    collectedByProxyOwnerId: "",
     personId: "",
     notes: "",
   });
@@ -453,6 +498,8 @@ function CollectionFormDialog({
       amount: "",
       date: TODAY,
       paidByType: "tenant",
+      collectionType: "rent",
+      collectedByProxyOwnerId: "",
       personId: "",
       notes: "",
     });
@@ -583,94 +630,159 @@ function CollectionFormDialog({
         </Row>
 
         <Row>
-          <Field label="Ödeyen">
+          <Field label="Tahsilat Türü" required>
             <Select
-              value={form.paidByType}
+              value={form.collectionType}
               onValueChange={(value) =>
-                setForm((f) => ({
-                  ...f,
-                  paidByType: value as CollectionFormState["paidByType"],
-                  personId:
-                    value === "tenant" && f.contractId !== ""
-                      ? (contracts.find((c) => c._id.toString() === f.contractId)
-                          ?.tenantId.toString() ?? "")
-                      : "",
-                }))
+                setForm((f) => {
+                  const collectionType = value as CollectionFormState["collectionType"];
+                  if (collectionType === "deposit") {
+                    const contract = contracts.find(
+                      (c) => c._id.toString() === f.contractId,
+                    );
+                    return {
+                      ...f,
+                      collectionType,
+                      accrualId: "",
+                      paidByType: "tenant",
+                      personId: contract ? contract.tenantId.toString() : "",
+                    };
+                  }
+                  return { ...f, collectionType };
+                })
               }
             >
               <SelectTrigger className="rounded-none">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="tenant">Kiracı</SelectItem>
-                <SelectItem value="proxy">Vekil</SelectItem>
+                <SelectItem value="rent">Kira</SelectItem>
+                <SelectItem value="deposit">Depozito</SelectItem>
               </SelectContent>
             </Select>
           </Field>
-          <Field label={form.paidByType === "proxy" ? "Vekil" : "Kiracı"} required>
+          <Field
+            label="Tahsilatı Yapan"
+            hint="vekil seçilirse cari hesabına borç işlenir"
+          >
             <Select
-              value={form.personId}
-              onValueChange={(value) => set("personId", value)}
+              value={
+                form.collectedByProxyOwnerId === ""
+                  ? "office"
+                  : form.collectedByProxyOwnerId
+              }
+              onValueChange={(value) =>
+                set("collectedByProxyOwnerId", value === "office" ? "" : value)
+              }
             >
               <SelectTrigger className="rounded-none">
-                <SelectValue
-                  placeholder={
-                    form.paidByType === "proxy"
-                      ? "Vekil seçin"
-                      : selectedContract
-                        ? tenantMap.get(selectedContract.tenantId.toString())?.name ?? "Kiracı seçin"
-                        : "Kiracı seçin"
-                  }
-                />
+                <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {form.paidByType === "proxy"
-                  ? proxyOwners.map((o) => (
-                      <SelectItem key={o._id} value={o._id}>
-                        {o.proxy?.name} ({o.name} adına)
-                      </SelectItem>
-                    ))
-                  : selectedContract
-                    ? (() => {
-                        const tenant = tenantMap.get(
-                          selectedContract.tenantId.toString(),
-                        );
-                        return tenant ? (
-                          <SelectItem key={tenant._id} value={tenant._id}>
-                            {tenant.name}
-                          </SelectItem>
-                        ) : null;
-                      })()
-                    : contracts.map((c) => {
-                        const tenant = tenantMap.get(c.tenantId.toString());
-                        return tenant ? (
-                          <SelectItem key={tenant._id} value={tenant._id}>
-                            {tenant.name}
-                          </SelectItem>
-                        ) : null;
-                      })}
+                <SelectItem value="office">Ofis / Yönetim</SelectItem>
+                {proxyOwners.map((o) => (
+                  <SelectItem key={o._id} value={o._id}>
+                    {o.proxy?.name} ({o.name} adına)
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </Field>
         </Row>
 
-        <Field label="Tahakkuka Bağla" hint="boş bırakılırsa en eski ödenmemiş tahakkuka otomatik bağlanır">
-          <Select
-            value={form.accrualId}
-            onValueChange={(value) => set("accrualId", value)}
-          >
-            <SelectTrigger className="rounded-none">
-              <SelectValue placeholder="Otomatik (en eski açık tahakkuk)" />
-            </SelectTrigger>
-            <SelectContent>
-              {contractAccruals.map((a) => (
-                <SelectItem key={a._id} value={a._id}>
-                  {a.period} · {formatCurrency(a.amount)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
+        {form.collectionType === "rent" && (
+          <Row>
+            <Field label="Ödeyen">
+              <Select
+                value={form.paidByType}
+                onValueChange={(value) =>
+                  setForm((f) => ({
+                    ...f,
+                    paidByType: value as CollectionFormState["paidByType"],
+                    personId:
+                      value === "tenant" && f.contractId !== ""
+                        ? (contracts.find((c) => c._id.toString() === f.contractId)
+                            ?.tenantId.toString() ?? "")
+                        : "",
+                  }))
+                }
+              >
+                <SelectTrigger className="rounded-none">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="tenant">Kiracı</SelectItem>
+                  <SelectItem value="proxy">Vekil</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label={form.paidByType === "proxy" ? "Vekil" : "Kiracı"} required>
+              <Select
+                value={form.personId}
+                onValueChange={(value) => set("personId", value)}
+              >
+                <SelectTrigger className="rounded-none">
+                  <SelectValue
+                    placeholder={
+                      form.paidByType === "proxy"
+                        ? "Vekil seçin"
+                        : selectedContract
+                          ? tenantMap.get(selectedContract.tenantId.toString())?.name ?? "Kiracı seçin"
+                          : "Kiracı seçin"
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {form.paidByType === "proxy"
+                    ? proxyOwners.map((o) => (
+                        <SelectItem key={o._id} value={o._id}>
+                          {o.proxy?.name} ({o.name} adına)
+                        </SelectItem>
+                      ))
+                    : selectedContract
+                      ? (() => {
+                          const tenant = tenantMap.get(
+                            selectedContract.tenantId.toString(),
+                          );
+                          return tenant ? (
+                            <SelectItem key={tenant._id} value={tenant._id}>
+                              {tenant.name}
+                            </SelectItem>
+                          ) : null;
+                        })()
+                      : contracts.map((c) => {
+                          const tenant = tenantMap.get(c.tenantId.toString());
+                          return tenant ? (
+                            <SelectItem key={tenant._id} value={tenant._id}>
+                              {tenant.name}
+                            </SelectItem>
+                          ) : null;
+                        })}
+                </SelectContent>
+              </Select>
+            </Field>
+          </Row>
+        )}
+
+        {form.collectionType === "rent" && (
+          <Field label="Tahakkuka Bağla" hint="boş bırakılırsa en eski ödenmemiş tahakkuka otomatik bağlanır">
+            <Select
+              value={form.accrualId}
+              onValueChange={(value) => set("accrualId", value)}
+            >
+              <SelectTrigger className="rounded-none">
+                <SelectValue placeholder="Otomatik (en eski açık tahakkuk)" />
+              </SelectTrigger>
+              <SelectContent>
+                {contractAccruals.map((a) => (
+                  <SelectItem key={a._id} value={a._id}>
+                    {a.period} · {formatCurrency(a.amount)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+        )}
 
         <Field label="Not">
           <Input

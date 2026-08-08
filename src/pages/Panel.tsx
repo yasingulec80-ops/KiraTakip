@@ -112,10 +112,9 @@ export default function Panel() {
       const paid = paidPerAccrual.get(a._id.toString()) ?? 0;
       return sum + Math.max(0, a.amount - paid);
     }, 0);
-    const collectedRent = (collections ?? []).reduce(
-      (sum, c) => sum + c.amount,
-      0,
-    );
+    const collectedRent = (collections ?? [])
+      .filter((c) => (c.collectionType ?? "rent") === "rent")
+      .reduce((sum, c) => sum + c.amount, 0);
 
     const money = (value: number) =>
       value === 0 ? "0 ₺" : formatCurrency(value);
@@ -456,7 +455,7 @@ function OverviewDetailDialog({
       onOpenChange={onOpenChange}
       title={meta?.title ?? "Detay"}
       description={meta?.hint}
-      wide
+      xwide
       footer={
         <>
           <Button
@@ -480,7 +479,7 @@ function OverviewDetailDialog({
         </>
       }
     >
-      <div className="max-h-[60vh] overflow-y-auto">
+      <div className="max-h-[60vh] overflow-auto">
         {tileId === "properties" && (
           <PropertyDetailList
             properties={properties}
@@ -510,9 +509,11 @@ function OverviewDetailDialog({
         {tileId === "collectedRents" && (
           <CollectionDetailList
             collections={collections}
+            accruals={accruals}
             contracts={contracts}
             propertyMap={propertyMap}
             tenantMap={tenantMap}
+            ownerMap={ownerMap}
           />
         )}
         {tileId === "owners" && <OwnerDetailList owners={owners} />}
@@ -553,7 +554,7 @@ function PropertyDetailList({
   ownerMap: Map<string, Doc<"owners">>;
 }) {
   return (
-    <DetailTable headers={["Gayrimenkul", "Adres", "M²", "Oda", "Malik"]}>
+    <DetailTable headers={["Gayrimenkul", "Adres", "M²", "Oda", "Cephe", "Malik"]}>
       {properties.map((p) => (
         <TableRow key={p._id}>
           <TableCell className="font-medium">{p.name}</TableCell>
@@ -562,6 +563,7 @@ function PropertyDetailList({
             {p.m2 !== undefined ? formatNumber(p.m2) : "—"}
           </TableCell>
           <TableCell className="text-sm">{p.roomCount ?? "—"}</TableCell>
+          <TableCell className="text-sm">{p.facade ?? "—"}</TableCell>
           <TableCell className="text-sm">
             {p.ownerId ? ownerMap.get(p.ownerId.toString())?.name ?? "—" : "—"}
           </TableCell>
@@ -756,28 +758,52 @@ function PendingRentDetailList({
 
 function CollectionDetailList({
   collections,
+  accruals,
   contracts,
   propertyMap,
   tenantMap,
+  ownerMap,
 }: {
   collections: Doc<"collections">[];
+  accruals: Doc<"accruals">[];
   contracts: Doc<"contracts">[];
   propertyMap: Map<string, Doc<"properties">>;
   tenantMap: Map<string, Doc<"tenants">>;
+  ownerMap: Map<string, Doc<"owners">>;
 }) {
   const contractMap = useMemo(() => {
     const map = new Map<string, Doc<"contracts">>();
     contracts.forEach((c) => map.set(c._id.toString(), c));
     return map;
   }, [contracts]);
-  const sorted = [...collections].sort((a, b) => b.date - a.date);
-  const total = collections.reduce((s, c) => s + c.amount, 0);
+  const accrualMap = useMemo(() => {
+    const map = new Map<string, Doc<"accruals">>();
+    accruals.forEach((a) => map.set(a._id.toString(), a));
+    return map;
+  }, [accruals]);
+  const sorted = [...collections]
+    .filter((c) => (c.collectionType ?? "rent") === "rent")
+    .sort((a, b) => b.date - a.date);
+  const total = sorted.reduce((s, c) => s + c.amount, 0);
+
+  const collectedByLabel = (c: Doc<"collections">): string => {
+    if (c.collectedByProxyOwnerId) {
+      const owner = ownerMap.get(c.collectedByProxyOwnerId.toString());
+      return owner?.proxy?.name ?? owner?.name ?? "Vekil";
+    }
+    return "Ofis";
+  };
 
   return (
     <div>
-      <DetailTable headers={["Tarih", "Gayrimenkul", "Kiracı", "Tutar"]}>
+      <DetailTable
+        headers={["Tarih", "Gayrimenkul", "Kiracı", "Dönem", "Ödeyen", "Tahsil Eden", "Tutar"]}
+      >
         {sorted.map((c) => {
           const contract = contractMap.get(c.contractId.toString());
+          const accrual = c.accrualId
+            ? accrualMap.get(c.accrualId.toString())
+            : undefined;
           return (
             <TableRow key={c._id}>
               <TableCell className="text-sm text-muted-foreground">
@@ -792,6 +818,27 @@ function CollectionDetailList({
                 {contract
                   ? tenantMap.get(contract.tenantId.toString())?.name ?? "—"
                   : "—"}
+              </TableCell>
+              <TableCell className="text-sm tabular-nums">
+                {accrual?.period ?? "—"}
+              </TableCell>
+              <TableCell className="text-sm">
+                {c.paidByType === "proxy"
+                  ? c.proxyOwnerId
+                    ? `Vekil · ${
+                        ownerMap.get(c.proxyOwnerId.toString())?.proxy?.name ?? "—"
+                      }`
+                    : "Vekil"
+                  : c.tenantId
+                    ? tenantMap.get(c.tenantId.toString())?.name ?? "Kiracı"
+                    : "Kiracı"}
+              </TableCell>
+              <TableCell className="text-sm">
+                {c.collectedByProxyOwnerId ? (
+                  <span className="font-medium">{collectedByLabel(c)}</span>
+                ) : (
+                  <span className="text-muted-foreground">Ofis</span>
+                )}
               </TableCell>
               <TableCell className="text-sm tabular-nums text-emerald-700">
                 {formatCurrency(c.amount)}

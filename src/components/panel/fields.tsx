@@ -118,6 +118,7 @@ export function DialogShell({
   children,
   footer,
   wide,
+  xwide,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -126,6 +127,7 @@ export function DialogShell({
   children: ReactNode;
   footer?: ReactNode;
   wide?: boolean;
+  xwide?: boolean;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -133,6 +135,7 @@ export function DialogShell({
         className={cn(
           "max-h-[90vh] overflow-y-auto rounded-none border-border bg-card sm:max-w-lg",
           wide && "sm:max-w-2xl",
+          xwide && "sm:max-w-5xl",
         )}
       >
         <DialogHeader className="border-b border-border pb-4 text-left">

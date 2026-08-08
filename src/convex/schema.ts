@@ -203,8 +203,12 @@ const schema = defineSchema(
       paidByType: v.optional(
         v.union(v.literal("tenant"), v.literal("proxy")),
       ),
+      collectionType: v.optional(
+        v.union(v.literal("rent"), v.literal("deposit")),
+      ), // kira / depozito tahsilatı
       tenantId: v.optional(v.id("tenants")), // paidByType = tenant
       proxyOwnerId: v.optional(v.id("owners")), // paidByType = proxy
+      collectedByProxyOwnerId: v.optional(v.id("owners")), // tahsilatı yapan vekil (borç işlenir)
       notes: v.optional(v.string()),
       createdBy: v.optional(v.id("users")),
     })
