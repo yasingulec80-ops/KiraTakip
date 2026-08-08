@@ -23,6 +23,7 @@ import { CollectionSection } from "@/components/panel/CollectionSection";
 import { ExpenseSection } from "@/components/panel/ExpenseSection";
 import { LedgerSection } from "@/components/panel/LedgerSection";
 import { UsersSection } from "@/components/panel/UsersSection";
+import { VekilDevirReport } from "@/components/panel/VekilDevirReport";
 import { useQuery } from "convex/react";
 import { cn } from "@/lib/utils";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/export";
@@ -47,6 +48,7 @@ type TabId =
   | "expenses"
   | "ledgers"
   | "deposits"
+  | "report"
   | "users";
 
 const TABS: { id: TabId; num?: number; label: string }[] = [
@@ -59,6 +61,7 @@ const TABS: { id: TabId; num?: number; label: string }[] = [
   { id: "expenses", num: 7, label: "Masraflar" },
   { id: "ledgers", num: 8, label: "Cari Hesaplar" },
   { id: "deposits", label: "Depozitolar" },
+  { id: "report", label: "Vekil Devir Raporu" },
 ];
 
 const VALID_TABS = new Set<string>(TABS.map((t) => t.id).concat("users"));
@@ -357,6 +360,7 @@ export default function Panel() {
             {activeTab === "expenses" && <ExpenseSection />}
             {activeTab === "ledgers" && <LedgerSection />}
             {activeTab === "deposits" && <DepositSection />}
+            {activeTab === "report" && <VekilDevirReport />}
             {activeTab === "users" && isAdmin && <UsersSection />}
             {activeTab === "users" && !isAdmin && <PropertySection />}
           </div>
