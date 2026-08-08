@@ -111,7 +111,20 @@ export default function Panel() {
         (paidPerAccrual.get(c.accrualId.toString()) ?? 0) + c.amount,
       );
     });
+    // Bekleyen kiralar: yalnızca vadesi geçmiş ve bu ay içinde vadesi gelen
+    // tahakkuklar sayılır; vadesi ileriki aylara ait olanlar dahil edilmez.
+    const now = new Date();
+    const monthEnd = new Date(
+      now.getFullYear(),
+      now.getMonth() + 1,
+      0,
+      23,
+      59,
+      59,
+      999,
+    ).getTime();
     const pendingRent = (accruals ?? []).reduce((sum, a) => {
+      if (a.dueDate > monthEnd) return sum;
       const paid = paidPerAccrual.get(a._id.toString()) ?? 0;
       return sum + Math.max(0, a.amount - paid);
     }, 0);
@@ -145,7 +158,7 @@ export default function Panel() {
         id: "pendingRents",
         label: "Bekleyen Kiralar",
         value: money(pendingRent),
-        caption: "tahsil edilmeyi bekleyen",
+        caption: "gecikmiş + bu ay vadesi gelen",
       },
       {
         id: "collectedRents",
@@ -709,49 +722,111 @@ function PendingRentDetailList({
     return map;
   }, [collections]);
 
-  const rows = accruals
-    .map((a) => {
-      const paid = paidByAccrual.get(a._id.toString()) ?? 0;
+  // Vadesi geçmiş ve bu ay içinde vadesi gelen tahakkuklar gösterilir;
+  // vadesi ileriki aylara ait olanlar bu görünüme dahil edilmez.
+  const { overdue, dueThisMonth, totalRemaining, overdueTotal, monthTotal } =
+    useMemo(() => {
+      const nowMs = new Date().getTime();
+      const monthEnd = new Date(
+        new Date(nowMs).getFullYear(),
+        new Date(nowMs).getMonth() + 1,
+        0,
+        23,
+        59,
+        59,
+        999,
+      ).getTime();
+      const allRows = accruals
+        .map((a) => {
+          const paid = paidByAccrual.get(a._id.toString()) ?? 0;
+          return {
+            accrual: a,
+            remaining: Math.max(0, a.amount - paid),
+          };
+        })
+        .filter((r) => r.remaining > 0 && r.accrual.dueDate <= monthEnd)
+        .sort((x, y) => x.accrual.dueDate - y.accrual.dueDate);
+      const overdue = allRows.filter((r) => r.accrual.dueDate < nowMs);
+      const dueThisMonth = allRows.filter((r) => r.accrual.dueDate >= nowMs);
       return {
-        accrual: a,
-        remaining: Math.max(0, a.amount - paid),
+        overdue,
+        dueThisMonth,
+        totalRemaining: allRows.reduce((s, r) => s + r.remaining, 0),
+        overdueTotal: overdue.reduce((s, r) => s + r.remaining, 0),
+        monthTotal: dueThisMonth.reduce((s, r) => s + r.remaining, 0),
       };
-    })
-    .filter((r) => r.remaining > 0)
-    .sort((x, y) => x.accrual.dueDate - y.accrual.dueDate);
+    }, [accruals, paidByAccrual]);
 
-  const totalRemaining = rows.reduce((s, r) => s + r.remaining, 0);
+  const renderGroup = (
+    rows: { accrual: Doc<"accruals">; remaining: number }[],
+  ) =>
+    rows.length === 0 ? (
+      <p className="border border-dashed border-border px-4 py-6 text-center text-xs text-muted-foreground">
+        Bu grupta kira yok.
+      </p>
+    ) : (
+      <div className="border border-border bg-card">
+        <div className="overflow-x-auto">
+          <DetailTable headers={["Dönem", "Gayrimenkul", "Kiracı", "Vade", "Kalan"]}>
+            {rows.map(({ accrual: a, remaining }) => {
+              const contract = contractMap.get(a.contractId.toString());
+              return (
+                <TableRow key={a._id}>
+                  <TableCell className="font-medium tabular-nums">
+                    {a.period}
+                  </TableCell>
+                  <TableCell className="text-sm">
+                    {contract
+                      ? propertyMap.get(contract.propertyId.toString())?.name ?? "—"
+                      : "—"}
+                  </TableCell>
+                  <TableCell className="text-sm">
+                    {contract
+                      ? tenantMap.get(contract.tenantId.toString())?.name ?? "—"
+                      : "—"}
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {formatDate(a.dueDate)}
+                  </TableCell>
+                  <TableCell className="text-sm tabular-nums text-amber-700">
+                    {formatCurrency(remaining)}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </DetailTable>
+        </div>
+      </div>
+    );
 
   return (
-    <div>
-      <DetailTable headers={["Dönem", "Gayrimenkul", "Kiracı", "Vade", "Kalan"]}>
-        {rows.map(({ accrual: a, remaining }) => {
-          const contract = contractMap.get(a.contractId.toString());
-          return (
-            <TableRow key={a._id}>
-              <TableCell className="font-medium tabular-nums">{a.period}</TableCell>
-              <TableCell className="text-sm">
-                {contract
-                  ? propertyMap.get(contract.propertyId.toString())?.name ?? "—"
-                  : "—"}
-              </TableCell>
-              <TableCell className="text-sm">
-                {contract
-                  ? tenantMap.get(contract.tenantId.toString())?.name ?? "—"
-                  : "—"}
-              </TableCell>
-              <TableCell className="text-sm text-muted-foreground">
-                {formatDate(a.dueDate)}
-              </TableCell>
-              <TableCell className="text-sm tabular-nums text-amber-700">
-                {formatCurrency(remaining)}
-              </TableCell>
-            </TableRow>
-          );
-        })}
-      </DetailTable>
-      <p className="mt-3 text-sm text-muted-foreground">
-        Toplam bekleyen kira:{" "}
+    <div className="space-y-6">
+      <div className="space-y-3">
+        <div className="flex items-baseline justify-between gap-4">
+          <span className="eyebrow text-amber-700">
+            Vadesi Geçen · {overdue.length} kira
+          </span>
+          <span className="font-display text-lg font-light tabular-nums text-amber-700">
+            {formatCurrency(overdueTotal)}
+          </span>
+        </div>
+        {renderGroup(overdue)}
+      </div>
+
+      <div className="space-y-3">
+        <div className="flex items-baseline justify-between gap-4">
+          <span className="eyebrow text-muted-foreground">
+            Bu Ay İçinde Vadesi Gelen · {dueThisMonth.length} kira
+          </span>
+          <span className="font-display text-lg font-light tabular-nums">
+            {formatCurrency(monthTotal)}
+          </span>
+        </div>
+        {renderGroup(dueThisMonth)}
+      </div>
+
+      <p className="text-sm text-muted-foreground">
+        Toplam bekleyen kira (gecikmiş + bu ay):{" "}
         <span className="font-medium text-amber-700">
           {formatCurrency(totalRemaining)}
         </span>
