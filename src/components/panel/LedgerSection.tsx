@@ -47,6 +47,7 @@ import { DialogShell, Field, Row } from "./fields";
 import { SectionToolbar } from "./SectionToolbar";
 import { DevirDialog } from "./DevirDialog";
 import { transferIsDeposit } from "@/lib/ledger-kind";
+import { devirablesFor, vekilTotalsOf } from "@/lib/vekil-math";
 
 type LedgerEntry = Doc<"ledgerEntries">;
 type Owner = Doc<"owners">;
@@ -204,29 +205,8 @@ export function LedgerSection() {
       .sort((a, b) => b.date - a.date);
 
   /** Vekilin tahsil edip henüz malike teslim etmediği tutarlar (kira / depozito ayrı). */
-  const devirablesOf = (
-    account: PersonAccount,
-  ): { rent: number; deposit: number } =>
-    (entries ?? [])
-      .filter(
-        (e) =>
-          e.personType === "proxy" && e.personId.toString() === account.personId,
-      )
-      .reduce(
-        (acc, e) => {
-          const isDeposit = transferIsDeposit(e.description);
-          if (
-            e.kind === "collection" &&
-            e.description.startsWith("Vekil tahsilatı")
-          ) {
-            acc[isDeposit ? "deposit" : "rent"] += Math.abs(e.amount);
-          } else if (e.kind === "transfer") {
-            acc[isDeposit ? "deposit" : "rent"] -= e.amount;
-          }
-          return acc;
-        },
-        { rent: 0, deposit: 0 },
-      );
+  const devirablesOf = (account: PersonAccount): { rent: number; deposit: number } =>
+    devirablesFor(entries ?? [], account.personId);
 
   const outstandingOf = (account: PersonAccount): number => {
     const d = devirablesOf(account);
@@ -241,34 +221,7 @@ export function LedgerSection() {
     collectedDeposit: number;
     rentTransfer: number;
     depositTransfer: number;
-  } => {
-    const totals = {
-      collectedRent: 0,
-      collectedDeposit: 0,
-      rentTransfer: 0,
-      depositTransfer: 0,
-    };
-    rangeFilteredEntries
-      .filter(
-        (e) =>
-          e.personType === account.personType &&
-          e.personId.toString() === account.personId,
-      )
-      .forEach((e) => {
-        const isDeposit = transferIsDeposit(e.description);
-        if (
-          e.kind === "collection" &&
-          e.description.startsWith("Vekil tahsilatı")
-        ) {
-          if (isDeposit) totals.collectedDeposit += Math.abs(e.amount);
-          else totals.collectedRent += Math.abs(e.amount);
-        } else if (e.kind === "transfer") {
-          if (isDeposit) totals.depositTransfer += e.amount;
-          else totals.rentTransfer += e.amount;
-        }
-      });
-    return totals;
-  };
+  } => vekilTotalsOf(rangeFilteredEntries, account.personId, account.personType);
 
   const entryRows = (account: PersonAccount): (string | number | null)[][] =>
     entriesOf(account).map((e) => [

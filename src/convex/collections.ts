@@ -4,6 +4,7 @@ import { getActor, getAuthorizedPropertyIds, requireActor, requirePropertyAccess
 import { createCollectionWithLedger } from "./ledger_ops";
 import { deleteLedgerForReference } from "./ledger_helpers";
 import { refreshAccrualStatus } from "./accruals";
+import { sameProxyCollectionConflict } from "../lib/collection-guard";
 
 /** List collections the user may see (property access). */
 export const list = query({
@@ -45,10 +46,11 @@ export const create = mutation({
     // Ödeyen vekil ile tahsilatı yapan aynı vekil olamaz — vekilin
     // cari hesabında borç ve alacağın birbirini götürmesini önler.
     if (
-      paidByType === "proxy" &&
-      args.proxyOwnerId &&
-      args.collectedByProxyOwnerId &&
-      args.proxyOwnerId === args.collectedByProxyOwnerId
+      sameProxyCollectionConflict(
+        paidByType,
+        args.proxyOwnerId,
+        args.collectedByProxyOwnerId,
+      )
     ) {
       throw new ConvexError(
         "Ödeyen vekil ile tahsilatı yapan aynı vekil olamaz.",

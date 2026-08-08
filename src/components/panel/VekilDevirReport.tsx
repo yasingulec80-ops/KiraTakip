@@ -24,6 +24,7 @@ import { toast } from "sonner";
 import { DevirDialog } from "./DevirDialog";
 import { SectionToolbar } from "./SectionToolbar";
 import { transferIsDeposit } from "@/lib/ledger-kind";
+import { devirablesFor, remainingOf } from "@/lib/vekil-math";
 
 type Owner = Doc<"owners">;
 type Contract = Doc<"contracts">;
@@ -70,19 +71,6 @@ interface ContractData {
   firstCollectionDate: number;
 }
 
-/**
- * Teslim bekleyen net tutar — vekilin malikten olan alacağı (kira/masraf
- * ödemeleri) düşüldükten sonra teslim edilecek tutar. Negatife düşemez:
- * alacak, eldeki tahsilattan fazlaysa teslim bekleyen 0 kabul edilir.
- */
-const remainingOf = (
-  c: number,
-  d: number,
-  rt: number,
-  dt: number,
-  alacak = 0,
-): number => Math.max(0, c + d - rt - dt - alacak);
-
 /** Vekil tahsilat ve devirlerinin malik bazında özet raporu + kontrat ayrıntısı. */
 export function VekilDevirReport() {
   const owners = useQuery(api.owners.list);
@@ -101,53 +89,6 @@ export function VekilDevirReport() {
     name: string;
     subtitle: string;
   } | null>(null);
-
-  /**
-   * Vekilin malikten olan alacağı: vekil adına yapılan ödemeler (vekilin
-   * ödediği kira, vekilin ödediği masraflar ve pozitif düzeltmeler).
-   * Devir kayıtları alacak değildir — onlar tahsilatın teslim edilmesidir.
-   */
-  const vekilAlacakOf = (ownerId: string): number =>
-    (entries ?? [])
-      .filter(
-        (e) =>
-          e.personType === "proxy" &&
-          e.personId.toString() === ownerId &&
-          e.kind !== "transfer" &&
-          e.amount > 0,
-      )
-      .reduce((sum, e) => sum + e.amount, 0);
-
-  /** Vekilin tahsil edip henüz devretmediği tutarlar (kira / depozito ayrı). */
-  const devirablesFor = (
-    ownerId: string,
-  ): { rent: number; deposit: number } => {
-    const gross = (entries ?? [])
-      .filter(
-        (e) => e.personType === "proxy" && e.personId.toString() === ownerId,
-      )
-      .reduce(
-        (acc, e) => {
-          const isDeposit = transferIsDeposit(e.description);
-          if (
-            e.kind === "collection" &&
-            e.description.startsWith("Vekil tahsilatı")
-          ) {
-            acc[isDeposit ? "deposit" : "rent"] += Math.abs(e.amount);
-          } else if (e.kind === "transfer") {
-            acc[isDeposit ? "deposit" : "rent"] -= e.amount;
-          }
-          return acc;
-        },
-        { rent: 0, deposit: 0 },
-      );
-    // Alacak (vekil adına ödenen kira/masraflar) tahsil edilen tutara mahsup edilir.
-    const alacak = vekilAlacakOf(ownerId);
-    return {
-      rent: Math.max(0, gross.rent - alacak),
-      deposit: gross.deposit,
-    };
-  };
 
   const openDevir = (ownerId: string, ownerName: string, vekilName: string) => {
     setDeviring({
@@ -745,9 +686,11 @@ export function VekilDevirReport() {
               }
             : null
         }
-        devirableRent={deviring ? devirablesFor(deviring.ownerId).rent : 0}
+        devirableRent={
+          deviring ? devirablesFor(entries ?? [], deviring.ownerId).rent : 0
+        }
         devirableDeposit={
-          deviring ? devirablesFor(deviring.ownerId).deposit : 0
+          deviring ? devirablesFor(entries ?? [], deviring.ownerId).deposit : 0
         }
         onOpenChange={(open) => !open && setDeviring(null)}
         onDevir={handleDevir}

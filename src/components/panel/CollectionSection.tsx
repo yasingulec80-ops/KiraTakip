@@ -39,6 +39,7 @@ import {
   parseNumber,
   printReport,
 } from "@/lib/export";
+import { sameProxyCollectionConflict } from "@/lib/collection-guard";
 import { useMutation, useQuery } from "convex/react";
 import { HandCoins, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -544,9 +545,11 @@ function CollectionFormDialog({
       return;
     }
     if (
-      form.paidByType === "proxy" &&
-      form.collectedByProxyOwnerId !== "" &&
-      form.collectedByProxyOwnerId === form.personId
+      sameProxyCollectionConflict(
+        form.paidByType,
+        form.personId,
+        form.collectedByProxyOwnerId,
+      )
     ) {
       setError("Ödeyen vekil ile tahsilatı yapan aynı vekil olamaz.");
       return;

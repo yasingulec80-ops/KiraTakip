@@ -43,6 +43,7 @@ import {
   printHtmlDocument,
   printReport,
 } from "@/lib/export";
+import { computeVat } from "@/lib/vat";
 import {
   useAction,
   useMutation,
@@ -712,18 +713,12 @@ function ContractFormDialog({
   const ownerIsCompany = selectedOwner?.isCompany === true;
   const vatRateNum = parseNumber(form.vatRate) ?? 0;
   // KDV tutarı — kira bedeli KDV hariçse KDV ayrıca eklenir; dahilse içinden çıkarılır.
-  const vatAmount =
+  const vatBreakdown =
     ownerIsCompany && vatRateNum > 0 && rentNum > 0
-      ? form.rentVat === "dahil"
-        ? rentNum - rentNum / (1 + vatRateNum / 100)
-        : rentNum * (vatRateNum / 100)
+      ? computeVat(rentNum, vatRateNum, form.rentVat)
       : null;
-  const vatInclusiveRent =
-    ownerIsCompany && vatRateNum > 0 && rentNum > 0 && vatAmount !== null
-      ? form.rentVat === "dahil"
-        ? rentNum
-        : rentNum + vatAmount
-      : null;
+  const vatAmount = vatBreakdown?.vatAmount ?? null;
+  const vatInclusiveRent = vatBreakdown?.vatInclusiveRent ?? null;
 
   const setFixture = (index: number, patch: Partial<FixtureDraft>) =>
     setForm((f) => ({
