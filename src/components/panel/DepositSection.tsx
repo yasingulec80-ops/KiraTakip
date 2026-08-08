@@ -43,6 +43,7 @@ type Tenant = Doc<"tenants">;
 const TODAY = dateToInput(Date.now());
 
 const DEPOSIT_STATUS_LABEL: Record<string, string> = {
+  pending: "Ödeme bekliyor",
   paid: "Ödendi",
   held: "Elde tutuluyor",
   returned: "İade edildi",
@@ -347,6 +348,7 @@ export function DepositSection() {
                           variant={status === "returned" ? "secondary" : "default"}
                           className={[
                             "rounded-none",
+                            status === "pending" && "bg-amber-50 text-amber-700",
                             status === "held" && "bg-muted text-muted-foreground",
                             status === "returned" && "text-muted-foreground",
                           ]

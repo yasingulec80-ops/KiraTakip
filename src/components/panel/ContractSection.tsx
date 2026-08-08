@@ -80,8 +80,9 @@ interface ContractFormState {
   rentAmount: string;
   depositAmount: string;
   depositMonths: string;
-  depositStatus: "paid" | "held" | "returned";
+  depositStatus: "pending" | "paid" | "held" | "returned";
   status: "active" | "ended";
+  guarantorEnabled: boolean;
   guarantorName: string;
   guarantorTc: string;
   guarantorPhone: string;
@@ -105,6 +106,7 @@ const emptyForm: ContractFormState = {
   depositMonths: "0",
   depositStatus: "paid",
   status: "active",
+  guarantorEnabled: false,
   guarantorName: "",
   guarantorTc: "",
   guarantorPhone: "",
@@ -128,6 +130,7 @@ const formFromContract = (c: Contract): ContractFormState => ({
   depositMonths: c.depositMonths ? String(c.depositMonths) : "0",
   depositStatus: c.depositStatus ?? "paid",
   status: c.status ?? "active",
+  guarantorEnabled: c.guarantor != null,
   guarantorName: c.guarantor?.name ?? "",
   guarantorTc: c.guarantor?.tcNo ?? "",
   guarantorPhone: c.guarantor?.phone ?? "",
@@ -159,6 +162,7 @@ const CSV_HEADERS = [
 ];
 
 const DEPOSIT_STATUS_LABEL: Record<string, string> = {
+  pending: "Ödeme bekliyor",
   paid: "Ödendi",
   held: "Elde tutuluyor",
   returned: "İade edildi",
@@ -319,15 +323,16 @@ export function ContractSection() {
           : undefined,
       depositStatus: form.depositStatus,
       status: form.status,
-      guarantor: hasGuarantor
-        ? {
-            name: form.guarantorName.trim(),
-            tcNo: form.guarantorTc.trim(),
-            phone: form.guarantorPhone.trim(),
-            address: form.guarantorAddress.trim(),
-            email: form.guarantorEmail.trim(),
-          }
-        : undefined,
+      guarantor:
+        form.guarantorEnabled && hasGuarantor
+          ? {
+              name: form.guarantorName.trim(),
+              tcNo: form.guarantorTc.trim(),
+              phone: form.guarantorPhone.trim(),
+              address: form.guarantorAddress.trim(),
+              email: form.guarantorEmail.trim(),
+            }
+          : undefined,
       evictionCommitment: form.evictionCommitment,
       evictionCommitmentDate:
         form.evictionCommitment && form.evictionCommitmentDate !== ""
@@ -715,9 +720,19 @@ function ContractFormDialog({
       setError("Aylık kira geçerli bir tutar olmalıdır.");
       return;
     }
-    if (form.evictionCommitment && form.evictionDate === "") {
-      setError("Tahliye taahhütnamesi için tahliye tarihi zorunludur.");
-      return;
+    if (form.evictionCommitment) {
+      if (form.evictionCommitmentDate === "") {
+        setError("Tahliye taahhütnamesi için taahhüt tarihi zorunludur.");
+        return;
+      }
+      if (form.evictionDate === "") {
+        setError("Tahliye taahhütnamesi için tahliye tarihi zorunludur.");
+        return;
+      }
+      if (form.evictionCommitmentDate === form.startDate) {
+        setError("Taahhüt tarihi, kontrat (başlangıç) tarihi ile aynı olamaz.");
+        return;
+      }
     }
     onSave(form);
   };
@@ -796,9 +811,9 @@ function ContractFormDialog({
             onValueChange={(value) => {
               const tenant = tenants.find((t) => t._id.toString() === value);
               setForm((f) => {
-                // Kefil alanları boşsa kiracının kayıtlı kefiliyle otomatik doldur.
+                // Kefil açıksa ve alanlar boşsa kiracının kayıtlı kefiliyle otomatik doldur.
                 const g = tenant?.guarantor;
-                const empty = f.guarantorName.trim() === "";
+                const empty = f.guarantorEnabled && f.guarantorName.trim() === "";
                 return {
                   ...f,
                   tenantId: value,
@@ -824,59 +839,89 @@ function ContractFormDialog({
           </Select>
         </Field>
 
-        {/* Kefil — isteğe bağlı */}
-        <div className="space-y-3 border border-border bg-muted/30 p-4">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-              Kefil Bilgileri
-            </span>
-            <span className="text-[11px] text-muted-foreground">isteğe bağlı</span>
-          </div>
-          <Row>
-            <Field label="Adı Soyadı">
-              <Input
-                value={form.guarantorName}
-                onChange={(e) => set("guarantorName", e.target.value)}
-                placeholder="Kefilin adı soyadı"
-                className="rounded-none"
-              />
-            </Field>
-            <Field label="TC Kimlik Numarası">
-              <Input
-                value={form.guarantorTc}
-                onChange={(e) => set("guarantorTc", e.target.value)}
-                placeholder="11122233344"
-                className="rounded-none"
-              />
-            </Field>
-          </Row>
-          <Row>
-            <Field label="Telefon Numarası">
-              <Input
-                value={form.guarantorPhone}
-                onChange={(e) => set("guarantorPhone", e.target.value)}
-                placeholder="05xx xxx xx xx"
-                className="rounded-none"
-              />
-            </Field>
-            <Field label="Mail Adresi">
-              <Input
-                type="email"
-                value={form.guarantorEmail}
-                onChange={(e) => set("guarantorEmail", e.target.value)}
-                placeholder="kefil@eposta.com"
-                className="rounded-none"
-              />
-            </Field>
-          </Row>
-          <Field label="Adresi">
-            <Input
-              value={form.guarantorAddress}
-              onChange={(e) => set("guarantorAddress", e.target.value)}
-              placeholder="Kefilin adresi"
-              className="rounded-none"
+        {/* Kefil — onay kutusuyla açılır */}
+        <div className="space-y-3 border border-border p-4">
+          <label className="flex cursor-pointer items-start gap-3">
+            <Checkbox
+              className="mt-0.5"
+              checked={form.guarantorEnabled}
+              onCheckedChange={(checked) =>
+                setForm((f) => {
+                  const enabled = checked === true;
+                  const g = enabled
+                    ? tenants.find((t) => t._id.toString() === f.tenantId)
+                        ?.guarantor
+                    : null;
+                  return {
+                    ...f,
+                    guarantorEnabled: enabled,
+                    // Açılırken kiracının kayıtlı kefili varsa otomatik doldur.
+                    guarantorName: enabled && g ? g.name : f.guarantorName,
+                    guarantorTc: enabled && g ? g.tcNo : f.guarantorTc,
+                    guarantorPhone: enabled && g ? g.phone : f.guarantorPhone,
+                    guarantorAddress: enabled && g ? g.address : f.guarantorAddress,
+                    guarantorEmail: enabled && g ? g.email : f.guarantorEmail,
+                  };
+                })
+              }
             />
-          </Field>
+            <span>
+              <span className="block text-sm font-medium">Kefil</span>
+              <span className="block text-xs leading-5 text-muted-foreground">
+                İşaretlenirse kefil bilgileri girilebilir ve kontrat belgesine
+                eklenir.
+              </span>
+            </span>
+          </label>
+          {form.guarantorEnabled && (
+            <div className="space-y-3 bg-muted/30 p-4">
+              <Row>
+                <Field label="Adı Soyadı">
+                  <Input
+                    value={form.guarantorName}
+                    onChange={(e) => set("guarantorName", e.target.value)}
+                    placeholder="Kefilin adı soyadı"
+                    className="rounded-none"
+                  />
+                </Field>
+                <Field label="TC Kimlik Numarası">
+                  <Input
+                    value={form.guarantorTc}
+                    onChange={(e) => set("guarantorTc", e.target.value)}
+                    placeholder="11122233344"
+                    className="rounded-none"
+                  />
+                </Field>
+              </Row>
+              <Row>
+                <Field label="Telefon Numarası">
+                  <Input
+                    value={form.guarantorPhone}
+                    onChange={(e) => set("guarantorPhone", e.target.value)}
+                    placeholder="05xx xxx xx xx"
+                    className="rounded-none"
+                  />
+                </Field>
+                <Field label="Mail Adresi">
+                  <Input
+                    type="email"
+                    value={form.guarantorEmail}
+                    onChange={(e) => set("guarantorEmail", e.target.value)}
+                    placeholder="kefil@eposta.com"
+                    className="rounded-none"
+                  />
+                </Field>
+              </Row>
+              <Field label="Adresi">
+                <Input
+                  value={form.guarantorAddress}
+                  onChange={(e) => set("guarantorAddress", e.target.value)}
+                  placeholder="Kefilin adresi"
+                  className="rounded-none"
+                />
+              </Field>
+            </div>
+          )}
         </div>
 
         <Row cols={3}>
@@ -951,6 +996,7 @@ function ContractFormDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="pending">Ödeme bekliyor</SelectItem>
                 <SelectItem value="paid">Ödendi</SelectItem>
                 <SelectItem value="held">Elde tutuluyor</SelectItem>
                 <SelectItem value="returned">İade edildi</SelectItem>
@@ -969,10 +1015,6 @@ function ContractFormDialog({
                 setForm((f) => ({
                   ...f,
                   evictionCommitment: checked === true,
-                  evictionCommitmentDate:
-                    checked === true && f.evictionCommitmentDate === ""
-                      ? f.startDate
-                      : f.evictionCommitmentDate,
                 }))
               }
             />

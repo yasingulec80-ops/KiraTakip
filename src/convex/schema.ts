@@ -56,8 +56,9 @@ export const contractStatusValidator = v.union(
 );
 export type ContractStatus = Infer<typeof contractStatusValidator>;
 
-// Depozito durumu — alındı / elde tutuluyor / iade edildi
+// Depozito durumu — ödeme bekliyor / alındı / elde tutuluyor / iade edildi
 export const depositStatusValidator = v.union(
+  v.literal("pending"),
   v.literal("paid"),
   v.literal("held"),
   v.literal("returned"),

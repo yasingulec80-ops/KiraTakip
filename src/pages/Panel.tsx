@@ -638,6 +638,7 @@ function ContractDetailList({
 }
 
 const DEPOSIT_STATUS_LABEL: Record<string, string> = {
+  pending: "Ödeme Bekliyor",
   paid: "Ödendi",
   held: "Elde Tutuluyor",
   returned: "İade Edildi",

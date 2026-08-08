@@ -65,6 +65,15 @@ export const create = mutation({
     if (args.durationMonths < 1) {
       throw new ConvexError("Kira süresi en az 1 ay olmalıdır.");
     }
+    if (
+      args.evictionCommitment &&
+      args.evictionCommitmentDate &&
+      args.evictionCommitmentDate === args.startDate
+    ) {
+      throw new ConvexError(
+        "Taahhüt tarihi, kontrat (başlangıç) tarihi ile aynı olamaz.",
+      );
+    }
 
     const contractId = await ctx.db.insert("contracts", {
       ...args,
@@ -93,6 +102,15 @@ export const update = mutation({
     await requirePropertyAccess(ctx, actor, args.propertyId);
 
     const { id, ...data } = args;
+    if (
+      data.evictionCommitment &&
+      data.evictionCommitmentDate &&
+      data.evictionCommitmentDate === data.startDate
+    ) {
+      throw new ConvexError(
+        "Taahhüt tarihi, kontrat (başlangıç) tarihi ile aynı olamaz.",
+      );
+    }
     await ctx.db.patch(id, {
       propertyId: data.propertyId,
       ownerId: data.ownerId,
