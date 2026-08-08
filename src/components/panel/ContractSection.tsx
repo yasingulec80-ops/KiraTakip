@@ -1685,10 +1685,10 @@ function buildContractHtml(
         <h2>MADDE 6 — DEMİRBAŞLAR</h2>
         <p class="clause">${esc(fixtureList)}</p>
 
-        <h2>MADDE 7 — GENEL KOŞULLAR</h2>
+        <h2>GENEL KOŞULLAR</h2>
         <div class="conditions">
           ${GENERAL_CONDITIONS.map(
-            (c, i) => `<p>${i + 1}. ${esc(c)}</p>`,
+            (c, i) => `<p><strong>Madde ${i + 1}.</strong> ${esc(c)}</p>`,
           ).join("\n          ")}
         </div>
       </div>
@@ -1702,7 +1702,7 @@ function buildContractHtml(
 
         ${
           contract.notes
-            ? `<h2>MADDE 8 — ÖZEL HÜKÜMLER</h2><p class="clause">${esc(contract.notes)}</p>`
+            ? `<h2>MADDE 7 — ÖZEL HÜKÜMLER</h2><p class="clause">${esc(contract.notes)}</p>`
             : ""
         }
 
