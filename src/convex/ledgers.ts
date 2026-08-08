@@ -16,7 +16,7 @@ import {
 } from "./ledger_ops";
 import { ledgerKindValidator, ledgerPersonTypeValidator } from "./schema";
 import { refreshAccrualStatus } from "./accruals";
-import { transferIsDeposit } from "../lib/ledger-kind";
+import { devirablesFor } from "../lib/vekil-math";
 
 /** List ledger entries the user may see (property access). */
 export const list = query({
@@ -197,8 +197,10 @@ export const createManual = mutation({
  * Vekil devri — vekilin tahsil ettiği tutarın malike teslim edilmesi.
  * Vekilin cari hesabındaki borç (tahsil edilen kira/depozito) bu tutar
  * kadar kapatılır (+). Teslim edilebilir tutar, vekilin tahsil ettiği ve
- * henüz devretmediği toplam ile sınırlıdır; transferType ile kira ve
- * depozito ayrı ayrı sınırlanır.
+ * henüz devretmediği toplamdan vekil alacağı (malik adına yaptığı ödemeler)
+ * düşülerek hesaplanır — Vekil Devir Raporu'ndaki net "teslim bekleyen"
+ * formülüyle aynı (bkz. devirablesFor). transferType ile kira ve depozito
+ * ayrı ayrı sınırlanır.
  */
 export const devir = mutation({
   args: {
@@ -223,27 +225,14 @@ export const devir = mutation({
     const transferType = args.transferType ?? "rent";
 
     // Vekilin tahsil ettiği ve henüz teslim etmediği tutarlar (kira / depozito ayrı).
+    // Vekil alacağı, kira tarafından mahsup edilir — raporlardaki net tutarla birebir aynı.
     const entries = await ctx.db
       .query("ledgerEntries")
       .withIndex("by_person", (q) =>
         q.eq("personType", "proxy").eq("personId", args.ownerId),
       )
       .collect();
-    const devirables = entries.reduce(
-      (acc, e) => {
-        const isDeposit = transferIsDeposit(e.description);
-        if (
-          e.kind === "collection" &&
-          e.description.startsWith("Vekil tahsilatı")
-        ) {
-          acc[isDeposit ? "deposit" : "rent"] += Math.abs(e.amount);
-        } else if (e.kind === "transfer") {
-          acc[isDeposit ? "deposit" : "rent"] -= e.amount;
-        }
-        return acc;
-      },
-      { rent: 0, deposit: 0 },
-    );
+    const devirables = devirablesFor(entries, args.ownerId.toString());
     const available =
       transferType === "deposit" ? devirables.deposit : devirables.rent;
     if (args.amount > available) {
