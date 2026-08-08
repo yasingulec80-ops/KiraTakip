@@ -40,6 +40,20 @@ export const create = mutation({
     await requirePropertyAccess(ctx, actor, contract.propertyId);
 
     const collectionType = args.collectionType ?? "rent";
+    const paidByType = args.paidByType ?? "tenant";
+
+    // Ödeyen vekil ile tahsilatı yapan aynı vekil olamaz — vekilin
+    // cari hesabında borç ve alacağın birbirini götürmesini önler.
+    if (
+      paidByType === "proxy" &&
+      args.proxyOwnerId &&
+      args.collectedByProxyOwnerId &&
+      args.proxyOwnerId === args.collectedByProxyOwnerId
+    ) {
+      throw new ConvexError(
+        "Ödeyen vekil ile tahsilatı yapan aynı vekil olamaz.",
+      );
+    }
 
     // Depozito tahsilatı tahakkuka bağlanmaz; kira tahsilatında tahakkuk
     // seçilmezse en eski ödenmemiş tahakkuka otomatik bağlanır.
@@ -68,7 +82,7 @@ export const create = mutation({
       accrualId,
       amount: args.amount,
       date: args.date,
-      paidByType: args.paidByType ?? "tenant",
+      paidByType,
       collectionType,
       tenantId: args.tenantId,
       proxyOwnerId: args.proxyOwnerId,

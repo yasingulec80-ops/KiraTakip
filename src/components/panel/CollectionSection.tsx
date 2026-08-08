@@ -543,6 +543,14 @@ function CollectionFormDialog({
       setError("Kontrat seçilmelidir.");
       return;
     }
+    if (
+      form.paidByType === "proxy" &&
+      form.collectedByProxyOwnerId !== "" &&
+      form.collectedByProxyOwnerId === form.personId
+    ) {
+      setError("Ödeyen vekil ile tahsilatı yapan aynı vekil olamaz.");
+      return;
+    }
     onSave(form);
   };
 
@@ -663,7 +671,11 @@ function CollectionFormDialog({
           </Field>
           <Field
             label="Tahsilatı Yapan"
-            hint="vekil seçilirse cari hesabına borç işlenir"
+            hint={
+              form.paidByType === "proxy" && form.personId
+                ? "ödeyen vekil ile aynı seçilemez"
+                : "vekil seçilirse cari hesabına borç işlenir"
+            }
           >
             <Select
               value={
@@ -672,7 +684,15 @@ function CollectionFormDialog({
                   : form.collectedByProxyOwnerId
               }
               onValueChange={(value) =>
-                set("collectedByProxyOwnerId", value === "office" ? "" : value)
+                set(
+                  "collectedByProxyOwnerId",
+                  value === "office"
+                    ? ""
+                    : form.paidByType === "proxy" &&
+                        value === form.personId
+                      ? ""
+                      : value,
+                )
               }
             >
               <SelectTrigger className="rounded-none">
@@ -681,7 +701,14 @@ function CollectionFormDialog({
               <SelectContent>
                 <SelectItem value="office">Malik</SelectItem>
                 {proxyOwners.map((o) => (
-                  <SelectItem key={o._id} value={o._id}>
+                  <SelectItem
+                    key={o._id}
+                    value={o._id}
+                    disabled={
+                      form.paidByType === "proxy" &&
+                      form.personId === o._id.toString()
+                    }
+                  >
                     {o.proxy?.name} ({o.name} adına)
                   </SelectItem>
                 ))}
@@ -719,7 +746,19 @@ function CollectionFormDialog({
             <Field label={form.paidByType === "proxy" ? "Vekil" : "Kiracı"} required>
               <Select
                 value={form.personId}
-                onValueChange={(value) => set("personId", value)}
+                onValueChange={(value) =>
+                  setForm((f) => ({
+                    ...f,
+                    personId: value,
+                    // Ödeyen vekil aynı zamanda "Tahsilatı Yapan" olamaz —
+                    // çelişkili kaydı önlemek için alan temizlenir.
+                    collectedByProxyOwnerId:
+                      f.paidByType === "proxy" &&
+                      f.collectedByProxyOwnerId === value
+                        ? ""
+                        : f.collectedByProxyOwnerId,
+                  }))
+                }
               >
                 <SelectTrigger className="rounded-none">
                   <SelectValue
