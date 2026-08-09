@@ -19,9 +19,16 @@ import { planBackfill } from "../lib/backfill-rules";
  * (tek kaynak, birim testli). Yalnızca yönetici çalıştırabilir.
  *
  * Çağrılar:
- *   bunx convex run backfill:stripStaleCompanyFields '{"dryRun":true}'  → sadece sayar, yazmaz
+ *   bun run backfill:smoke                                             → yerel dry-run smoke check (veritabanına yazmaz)
+ *   bunx convex run backfill:stripStaleCompanyFields '{"dryRun":true}' → sadece sayar, yazmaz
  *   bunx convex run backfill:stripStaleCompanyFields                    → gerçek temizlik
  * Güvenli: zaten doğru olan kayıtlara dokunmaz; `dryRun: true` hiçbir şey yazmaz.
+ *
+ * Smoke check akışı (tohumlanmış veriyle):
+ *   1. bun run backfill:smoke            → yerel, tohumlanmış veriyle planBackfill'i doğrular (yazma yok)
+ *   2. bunx convex run seed:seedDemoData → gerçek ortamda demo verisi
+ *   3. bunx convex run backfill:stripStaleCompanyFields '{"dryRun":true}' → gerçek ortamda ön rapor
+ *   4. sayılar beklenen gibiyse gerçek temizlik (adım 3'teki komut dryRun'suz)
  */
 export const stripStaleCompanyFields = mutation({
   args: { dryRun: v.optional(v.boolean()) },

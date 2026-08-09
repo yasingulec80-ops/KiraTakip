@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "preview": "vite preview",
+    "backfill:smoke": "bun run scripts/backfill-smoke.ts",
     "test": "bun test tests/"
   },
   "dependencies": {

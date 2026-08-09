@@ -257,6 +257,38 @@ await ctx.runMutation(internal.users.update, {
 ```
 
 
+## Kişi ⇄ Şirket dönüşüm temizliği (backfill)
+
+`src/convex/backfill.ts` — eski "kişi → şirket" ya da "şirket → kişi" dönüşümlerinde kayıtlarda bayat kalan alanları temizler:
+
+- `isCompany === true` kayıtlardan eski kişisel `tcNo` silinir (imza yetkilisi TC'si `signatoryTcNo` ayrı durur).
+- Kişi (`isCompany !== true`) kayıtlarından şirket alanları (`taxOffice`, `taxNumber`, `signatoryName`, `signatoryTcNo`) silinir.
+
+Yalnızca yönetici çalıştırabilir. Karar mantığı testli saf fonksiyonlarda: `src/lib/backfill-rules.ts`.
+
+### Smoke check (dry-run)
+
+Yerel, veritabanına hiçbir şey yazmayan hızlı doğrulama — tohumlanmış veriyle `planBackfill`'i çalıştırır, sayımları ve sıfır yazmayı doğrular:
+
+```bash
+bun run backfill:smoke
+```
+
+### Gerçek ortam akışı
+
+```bash
+# 1. (Opsiyonel) Demo verisi yalnızca boş veritabanında oluşur
+bunx convex run seed:seedDemoData
+
+# 2. Önce dry-run — yalnızca raporlar, hiçbir şey yazmaz
+bunx convex run backfill:stripStaleCompanyFields '{"dryRun":true}'
+
+# 3. Rapor beklenen gibi görünüyorsa gerçek temizlik
+bunx convex run backfill:stripStaleCompanyFields
+```
+
+`dryRun` sayımları gerçek modla birebir aynı kod yolundan üretilir; dry-run sırasında yazılacak hiçbir yama üretilmez.
+
 ## Common Convex Mistakes To Avoid
 
 When using convex, make sure:
