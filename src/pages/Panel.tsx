@@ -1201,14 +1201,16 @@ function RentIncreaseDialog({
     }
     setSaving(true);
     try {
-      await applyRentIncrease({
+      const result = await applyRentIncrease({
         contractId: contract._id,
         newRentAmount,
         rate: rateNum,
         effectiveDate: effectiveMs,
       });
       toast.success(
-        `Kira artışı uygulandı — yeni kira ${formatCurrency(newRentAmount)}/ay.`,
+        result.notifyScheduled
+          ? `Kira artışı uygulandı — yeni kira ${formatCurrency(newRentAmount)}/ay. Malik ve kiracıya bildirim e-postası gönderildi.`
+          : `Kira artışı uygulandı — yeni kira ${formatCurrency(newRentAmount)}/ay.`,
       );
       onClose();
     } catch (err) {

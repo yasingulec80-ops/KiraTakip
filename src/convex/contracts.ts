@@ -2,6 +2,7 @@ import { ConvexError, v } from "convex/values";
 import { action, mutation, query } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
+import { internal } from "./_generated/api";
 import {
   ROLES,
   contractStatusValidator,
@@ -19,6 +20,7 @@ import {
 } from "./ledger_helpers";
 import { depositAccrualDecision } from "../lib/ledger-posts";
 import { nextIncreaseDateOf } from "../lib/rent-increase";
+import { increaseNotificationRecipients } from "../lib/increase-notify";
 import {
   contractMonths,
   createAccrualWithLedger,
@@ -288,10 +290,41 @@ export const applyRentIncrease = mutation({
       }
     }
 
+    // Malik ve kiracıya e-posta bildirimi — mutation commit olduktan sonra
+    // scheduler action'ı tetikler. E-postası olmayan taraf atlanır; e-posta
+    // gateway'i (VLY_INTEGRATION_KEY) yapılandırılmamışsa action sessizce no-op.
+    const [owner, tenant, property] = await Promise.all([
+      ctx.db.get(contract.ownerId),
+      ctx.db.get(contract.tenantId),
+      ctx.db.get(contract.propertyId),
+    ]);
+    const recipients = increaseNotificationRecipients(owner, tenant);
+    let notifyScheduled = false;
+    if (recipients.length > 0) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.reminders.sendRentIncreaseNotification,
+        {
+          propertyName: property?.name ?? "Gayrimenkul",
+          tenantName: tenant?.name ?? "Kiracı",
+          tenantEmail: tenant?.email,
+          ownerName: owner?.name ?? "Malik",
+          ownerEmail: owner?.email,
+          oldRent: contract.rentAmount,
+          newRent: args.newRentAmount,
+          rate: args.rate,
+          effectiveDate: args.effectiveDate,
+          nextIncreaseDate: nextIncreaseDate ?? undefined,
+        },
+      );
+      notifyScheduled = true;
+    }
+
     return {
       rentAmount: args.newRentAmount,
       updatedAccruals,
       nextIncreaseDate: nextIncreaseDate ?? undefined,
+      notifyScheduled,
     };
   },
 });
