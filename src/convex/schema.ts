@@ -200,6 +200,10 @@ const schema = defineSchema(
       depositStatus: v.optional(depositStatusValidator), // Yalnızca iade takibi (Depozitolar modülü)
       depositReturnedAt: v.optional(v.number()), // İade tarihi (ms)
       depositNote: v.optional(v.string()), // İade notu
+      rentIncreaseRate: v.optional(v.number()), // Kira artış oranı (%)
+      nextIncreaseDate: v.optional(v.number()), // Bir sonraki artış tarihi (ms)
+      lastIncreaseDate: v.optional(v.number()), // Son uygulanan artış tarihi (ms)
+      useTuikInflation: v.optional(v.boolean()), // TÜFE 12 aylık ortalama tiki
       guarantor: v.optional(guarantorValidator), // Kefil (kontrat bazlı)
       evictionCommitment: v.optional(v.boolean()), // Tahliye taahhütnamesi eklensin mi
       evictionCommitmentDate: v.optional(v.number()), // Taahhüt tarihi (ms)
@@ -273,6 +277,7 @@ const schema = defineSchema(
       notifyTenant: v.optional(v.boolean()), // kiracıya e-posta
       notifyOwner: v.optional(v.boolean()), // malike e-posta
       generalConditions: v.optional(v.array(v.string())), // kontrat genel koşulları (madde listesi)
+      cpi12MonthAvg: v.optional(v.number()), // TÜFE 12 aylık ortalama oranı (%)
     }).index("by_key", ["key"]),
 
     // Kira hatırlatma e-postaları — gönderim kaydı (mükerrer gönderimi önler)

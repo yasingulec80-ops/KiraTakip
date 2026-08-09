@@ -1,8 +1,10 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { api } from "@/convex/_generated/api";
 import type { Doc } from "@/convex/_generated/dataModel";
-import { DialogShell } from "@/components/panel/fields";
+import { DialogShell, Field, Row } from "@/components/panel/fields";
 import {
   Table,
   TableBody,
@@ -13,6 +15,12 @@ import {
 } from "@/components/ui/table";
 import { useAuth } from "@/hooks/use-auth";
 import { KpiGrid, type KpiTile } from "@/components/panel/KpiGrid";
+import {
+  INCREASE_LOOKAHEAD_DAYS,
+  effectiveNextIncreaseDate,
+  increasedRent,
+  isIncreaseDue,
+} from "@/lib/rent-increase";
 import { OwnerSection } from "@/components/panel/OwnerSection";
 import { PropertySection } from "@/components/panel/PropertySection";
 import { TenantSection } from "@/components/panel/TenantSection";
@@ -24,19 +32,28 @@ import { ExpenseSection } from "@/components/panel/ExpenseSection";
 import { LedgerSection } from "@/components/panel/LedgerSection";
 import { UsersSection } from "@/components/panel/UsersSection";
 import { VekilDevirReport } from "@/components/panel/VekilDevirReport";
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { cn } from "@/lib/utils";
-import { formatCurrency, formatDate, formatNumber } from "@/lib/export";
+import {
+  dateToInput,
+  formatCurrency,
+  formatDate,
+  formatNumber,
+  parseDateInput,
+  parseNumber,
+} from "@/lib/export";
 import {
   ArrowUpRight,
   Building2,
   LogOut,
   Lock,
   ShieldCheck,
+  TrendingUp,
   Users,
 } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
+import { toast } from "sonner";
 
 type TabId =
   | "properties"
@@ -99,6 +116,10 @@ export default function Panel() {
     const activeContracts = (contracts ?? []).filter(
       (c) => c.status !== "ended",
     );
+    const nowMs = new Date().getTime();
+    const increaseDueContracts = activeContracts.filter((c) =>
+      isIncreaseDue(effectiveNextIncreaseDate(c), nowMs),
+    );
     const totalDeposits = (contracts ?? [])
       .filter((c) => !c.depositReturnedAt)
       .reduce((sum, c) => sum + c.depositAmount, 0);
@@ -151,6 +172,12 @@ export default function Panel() {
         caption: "yürürlükteki sözleşme",
       },
       {
+        id: "rentIncreases",
+        label: "Kira Artışı Yaklaşan",
+        value: count(increaseDueContracts.length),
+        caption: `${INCREASE_LOOKAHEAD_DAYS} gün içinde artış dönemi gelen`,
+      },
+      {
         id: "deposits",
         label: "Depozitolar",
         value: money(totalDeposits),
@@ -193,6 +220,7 @@ export default function Panel() {
     const tabFor: Record<string, TabId> = {
       properties: "properties",
       contracts: "contracts",
+      rentIncreases: "contracts",
       deposits: "deposits",
       pendingRents: "accruals",
       collectedRents: "collections",
@@ -393,6 +421,10 @@ const DETAIL_TITLES: Record<string, { title: string; hint: string }> = {
     title: "Aktif Sözleşmeler",
     hint: "Yürürlükteki kira sözleşmeleri",
   },
+  rentIncreases: {
+    title: "Kira Artışı Yaklaşan",
+    hint: "Artış dönemi gelen ve geciken kontratlar",
+  },
   deposits: {
     title: "Depozitolar",
     hint: "Sözleşme bazında tutulan depozitolar",
@@ -525,6 +557,13 @@ function OverviewDetailDialog({
             propertyMap={propertyMap}
             tenantMap={tenantMap}
             ownerMap={ownerMap}
+          />
+        )}
+        {tileId === "rentIncreases" && (
+          <RentIncreaseDetailList
+            contracts={contracts}
+            propertyMap={propertyMap}
+            tenantMap={tenantMap}
           />
         )}
         {tileId === "owners" && <OwnerDetailList owners={owners} />}
@@ -991,5 +1030,348 @@ function TenantDetailList({ tenants }: { tenants: Doc<"tenants">[] }) {
         </TableRow>
       ))}
     </DetailTable>
+  );
+}
+
+/* ------------------------- Kira artışı takibi ------------------------- */
+
+/** Artış dönemi gelen kontratlar — güncellemeler bu karodan yapılır. */
+function RentIncreaseDetailList({
+  contracts,
+  propertyMap,
+  tenantMap,
+}: {
+  contracts: Doc<"contracts">[];
+  propertyMap: Map<string, Doc<"properties">>;
+  tenantMap: Map<string, Doc<"tenants">>;
+}) {
+  const [applying, setApplying] = useState<Doc<"contracts"> | null>(null);
+  const nowMs = new Date().getTime();
+
+  const due = contracts
+    .filter((c) => c.status !== "ended")
+    .map((c) => ({ contract: c, next: effectiveNextIncreaseDate(c) }))
+    .filter((row) => isIncreaseDue(row.next, nowMs))
+    .sort((a, b) => (a.next ?? 0) - (b.next ?? 0));
+
+  if (due.length === 0) {
+    return (
+      <div className="flex items-center justify-center gap-3 border border-dashed border-border px-4 py-12 text-sm text-muted-foreground">
+        <TrendingUp className="h-4 w-4" />
+        Şu an artış dönemi gelen kontrat yok.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="overflow-x-auto border border-border bg-card">
+        <DetailTable
+          headers={["Gayrimenkul", "Kiracı", "Aylık Kira", "Artış Dönemi", "Durum", "Eylem"]}
+        >
+          {due.map(({ contract: c, next }) => {
+            const overdue = (next ?? 0) < nowMs;
+            return (
+              <TableRow key={c._id}>
+                <TableCell className="font-medium">
+                  {propertyMap.get(c.propertyId.toString())?.name ?? "—"}
+                </TableCell>
+                <TableCell className="text-sm">
+                  {tenantMap.get(c.tenantId.toString())?.name ?? "—"}
+                </TableCell>
+                <TableCell className="text-sm tabular-nums">
+                  {formatCurrency(c.rentAmount)}
+                  {c.rentIncreaseRate !== undefined && (
+                    <span className="ml-1 text-xs text-muted-foreground">
+                      · %{c.rentIncreaseRate}
+                    </span>
+                  )}
+                </TableCell>
+                <TableCell className="text-sm tabular-nums">
+                  {next ? formatDate(next) : "—"}
+                </TableCell>
+                <TableCell>
+                  <Badge
+                    variant={overdue ? "destructive" : "outline"}
+                    className="rounded-none"
+                  >
+                    {overdue ? "Gecikti" : "Yaklaşıyor"}
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-right">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="rounded-none"
+                    onClick={() => setApplying(c)}
+                  >
+                    Artış Uygula
+                  </Button>
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </DetailTable>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Artış uygulandığında kira tutarı güncellenir, artış tarihinden itibaren
+        gelecek kira tahakkukları yeni tutara işlenir ve sonraki artış dönemi
+        otomatik hesaplanır.
+      </p>
+
+      <RentIncreaseDialog
+        contract={applying}
+        onClose={() => setApplying(null)}
+      />
+    </div>
+  );
+}
+
+/** Kira artışı uygulama formu — karodan açılır. */
+function RentIncreaseDialog({
+  contract,
+  onClose,
+}: {
+  contract: Doc<"contracts"> | null;
+  onClose: () => void;
+}) {
+  const applyRentIncrease = useMutation(api.contracts.applyRentIncrease);
+  const tuik = useQuery(api.settings.getTuikInflation);
+  const updateTuik = useMutation(api.settings.updateTuikInflation);
+
+  const [rate, setRate] = useState("");
+  const [newRent, setNewRent] = useState("");
+  const [rentTouched, setRentTouched] = useState(false);
+  const [effectiveDate, setEffectiveDate] = useState("");
+  const [useTuik, setUseTuik] = useState(false);
+  const [tuikEdit, setTuikEdit] = useState("");
+  const [tuikEdited, setTuikEdited] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const [lastKey, setLastKey] = useState("");
+  const key = contract ? `apply-${contract._id}` : "closed";
+  if (key !== lastKey) {
+    setLastKey(key);
+    setRate(
+      contract?.rentIncreaseRate !== undefined
+        ? String(contract.rentIncreaseRate)
+        : "",
+    );
+    setNewRent(contract ? String(contract.rentAmount) : "");
+    setRentTouched(false);
+    setEffectiveDate(
+      contract?.nextIncreaseDate ? dateToInput(contract.nextIncreaseDate) : "",
+    );
+    setUseTuik(contract?.useTuikInflation === true);
+    setTuikEdit("");
+    setTuikEdited(false);
+    setError(null);
+  }
+
+  const rateNum = parseNumber(rate) ?? 0;
+  const baseRent = contract?.rentAmount ?? 0;
+  const computedRent = increasedRent(baseRent, rateNum);
+  const rentValue = rentTouched ? newRent : String(computedRent);
+  // TÜFE alanı: kullanıcı düzenlemediyse kayıtlı değer canlı gösterilir.
+  const tuikInputValue = tuikEdited
+    ? tuikEdit
+    : String(tuik?.cpi12MonthAvg ?? 0);
+
+  const submit = async () => {
+    if (!contract) return;
+    const newRentAmount = parseNumber(rentValue);
+    if (newRentAmount === undefined || newRentAmount <= 0) {
+      setError("Yeni kira tutarı geçerli olmalıdır.");
+      return;
+    }
+    if (rateNum < 0) {
+      setError("Artış oranı negatif olamaz.");
+      return;
+    }
+    const effectiveMs = parseDateInput(effectiveDate);
+    if (effectiveMs === undefined) {
+      setError("Artış tarihi zorunludur.");
+      return;
+    }
+    if (effectiveMs < contract.startDate) {
+      setError("Artış tarihi kontrat başlangıcından önce olamaz.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await applyRentIncrease({
+        contractId: contract._id,
+        newRentAmount,
+        rate: rateNum,
+        effectiveDate: effectiveMs,
+      });
+      toast.success(
+        `Kira artışı uygulandı — yeni kira ${formatCurrency(newRentAmount)}/ay.`,
+      );
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "İşlem başarısız.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <DialogShell
+      open={contract !== null}
+      onOpenChange={(open) => !open && onClose()}
+      title="Kira Artışı Uygula"
+      description={
+        contract
+          ? `${contract.rentAmount.toLocaleString("tr-TR")} ₺ → yeni tutar · ` +
+            `artış dönemi ${contract.nextIncreaseDate ? formatDate(contract.nextIncreaseDate) : "—"}`
+          : ""
+      }
+      footer={
+        <>
+          <Button
+            type="button"
+            variant="outline"
+            className="rounded-none"
+            onClick={onClose}
+          >
+            Vazgeç
+          </Button>
+          <Button
+            type="button"
+            className="rounded-none"
+            disabled={saving}
+            onClick={submit}
+          >
+            {saving ? "Uygulanıyor…" : "Artışı Uygula"}
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-5">
+        {error && (
+          <p className="text-sm text-destructive" role="alert">
+            {error}
+          </p>
+        )}
+
+        <Row cols={3}>
+          <Field label="Mevcut Kira" hint="₺/ay">
+            <Input
+              value={contract ? String(contract.rentAmount) : ""}
+              readOnly
+              className="rounded-none bg-muted/40"
+            />
+          </Field>
+          <Field label="Artış Oranı" hint="% · yıllık">
+            <Input
+              type="number"
+              min={0}
+              max={100}
+              value={rate}
+              onChange={(e) => {
+                setRate(e.target.value);
+                setRentTouched(false);
+              }}
+              placeholder="25"
+              className="rounded-none"
+            />
+          </Field>
+          <Field label="Yeni Kira" required hint="₺/ay">
+            <Input
+              type="number"
+              min={0}
+              value={rentValue}
+              onChange={(e) => {
+                setNewRent(e.target.value);
+                setRentTouched(true);
+              }}
+              className="rounded-none"
+            />
+          </Field>
+        </Row>
+
+        <Field label="Artış Tarihi" required hint="bu tarihten itibaren tahakkuklar güncellenir">
+          <Input
+            type="date"
+            value={effectiveDate}
+            onChange={(e) => setEffectiveDate(e.target.value)}
+            className="rounded-none"
+          />
+        </Field>
+
+        <div className="space-y-3 border border-border p-4">
+          <label className="flex cursor-pointer items-start gap-3">
+            <Checkbox
+              className="mt-0.5"
+              checked={useTuik}
+              onCheckedChange={(checked) => {
+                const enabled = checked === true;
+                setUseTuik(enabled);
+                if (enabled) {
+                  setRate(String(tuik?.cpi12MonthAvg ?? 0));
+                  setRentTouched(false);
+                }
+              }}
+            />
+            <span>
+              <span className="block text-sm font-medium">
+                TÜFE 12 Aylık Ortalama
+              </span>
+              <span className="block text-xs leading-5 text-muted-foreground">
+                İşaretlendiğinde artış oranı TÜFE 12 aylık ortalamasından
+                otomatik doldurulur.
+              </span>
+            </span>
+          </label>
+          {useTuik && (
+            <div className="flex flex-wrap items-end gap-3 bg-muted/30 p-4">
+              <div className="w-44">
+                <Field label="TÜFE 12 Aylık Ortalama" hint="% · kayıtlı değer">
+                  <Input
+                    type="number"
+                    min={0}
+                    max={200}
+                    value={tuikInputValue}
+                    onChange={(e) => {
+                      setTuikEdited(true);
+                      setTuikEdit(e.target.value);
+                    }}
+                    className="rounded-none"
+                  />
+                </Field>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                className="rounded-none"
+                onClick={async () => {
+                  const value = parseNumber(tuikInputValue);
+                  if (value === undefined || value < 0) {
+                    setError("TÜFE oranı geçerli bir yüzde olmalıdır.");
+                    return;
+                  }
+                  try {
+                    await updateTuik({ cpi12MonthAvg: value });
+                    setTuikEdited(false);
+                    setRate(String(value));
+                    setRentTouched(false);
+                    toast.success("TÜFE oranı kaydedildi; artış oranı güncellendi.");
+                  } catch (err) {
+                    setError(
+                      err instanceof Error ? err.message : "Kayıt başarısız.",
+                    );
+                  }
+                }}
+              >
+                TÜFE'yi Kaydet
+              </Button>
+            </div>
+          )}
+        </div>
+      </div>
+    </DialogShell>
   );
 }

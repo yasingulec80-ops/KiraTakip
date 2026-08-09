@@ -17,7 +17,7 @@ export function KpiGrid({
   onOpen: (id: string) => void;
 }) {
   return (
-    <div className="grid grid-cols-2 gap-px border border-border bg-border sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
+    <div className="grid grid-cols-2 gap-px border border-border bg-border sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8">
       {tiles.map((tile, i) => (
         <button
           key={tile.id}

@@ -99,3 +99,50 @@ export const updateGeneralConditions = mutation({
     return true;
   },
 });
+
+const TUIK_SETTINGS_KEY = "tuik";
+
+export const DEFAULT_TUIK_INFLATION = {
+  cpi12MonthAvg: 0,
+};
+
+/** TÜFE 12 aylık ortalama oranı (%) — kira artışlarında kullanılır. */
+export const getTuikInflation = query({
+  handler: async (ctx) => {
+    const doc = await ctx.db
+      .query("settings")
+      .withIndex("by_key", (q) => q.eq("key", TUIK_SETTINGS_KEY))
+      .first();
+    if (!doc) return DEFAULT_TUIK_INFLATION;
+    return {
+      cpi12MonthAvg: doc.cpi12MonthAvg ?? 0,
+    };
+  },
+});
+
+/** TÜFE 12 aylık ortalama oranını günceller (yalnızca yönetici). */
+export const updateTuikInflation = mutation({
+  args: { cpi12MonthAvg: v.number() },
+  handler: async (ctx, args) => {
+    const actor = await requireActor(ctx);
+    if (actor.role !== ROLES.ADMIN) {
+      throw new ConvexError("Yalnızca yönetici TÜFE oranını güncelleyebilir.");
+    }
+    if (args.cpi12MonthAvg < 0) {
+      throw new ConvexError("TÜFE oranı negatif olamaz.");
+    }
+    const existing = await ctx.db
+      .query("settings")
+      .withIndex("by_key", (q) => q.eq("key", TUIK_SETTINGS_KEY))
+      .first();
+    if (existing) {
+      await ctx.db.patch(existing._id, { cpi12MonthAvg: args.cpi12MonthAvg });
+    } else {
+      await ctx.db.insert("settings", {
+        key: TUIK_SETTINGS_KEY,
+        cpi12MonthAvg: args.cpi12MonthAvg,
+      });
+    }
+    return true;
+  },
+});

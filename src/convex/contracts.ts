@@ -18,6 +18,7 @@ import {
   requirePropertyAccess,
 } from "./ledger_helpers";
 import { depositAccrualDecision } from "../lib/ledger-posts";
+import { nextIncreaseDateOf } from "../lib/rent-increase";
 import {
   contractMonths,
   createAccrualWithLedger,
@@ -34,6 +35,8 @@ const contractArgs = {
   rentAmount: v.number(),
   rentVat: v.optional(rentVatValidator),
   vatRate: v.optional(v.number()),
+  rentIncreaseRate: v.optional(v.number()),
+  useTuikInflation: v.optional(v.boolean()),
   depositAmount: v.number(),
   depositMonths: v.optional(v.number()),
   guarantor: v.optional(guarantorValidator),
@@ -80,10 +83,16 @@ export const create = mutation({
       );
     }
 
+    const nextIncreaseDate = nextIncreaseDateOf(
+      args.startDate,
+      args.durationMonths,
+      null,
+    );
     const contractId = await ctx.db.insert("contracts", {
       ...args,
       fixtures: args.fixtures ?? [],
       status: args.status ?? "active",
+      nextIncreaseDate: nextIncreaseDate ?? undefined,
       createdBy: actor._id,
     });
     const contract = await ctx.db.get(contractId);
@@ -129,6 +138,14 @@ export const update = mutation({
         "Taahhüt tarihi, kontrat (başlangıç) tarihi ile aynı olamaz.",
       );
     }
+    // Başlangıç tarihi değiştiyse artış yıldönümleri eski tarihe göre bayatlar;
+    // yeni başlangıçtan ilk yıldönümü yeniden hesaplanır. Değişmediyse kayıtlı
+    // sonraki artış tarihi korunur (artış uygulanarak ilerletilmiş olabilir).
+    const nextIncreaseDate =
+      data.startDate !== contract.startDate ||
+      data.durationMonths !== contract.durationMonths
+        ? nextIncreaseDateOf(data.startDate, data.durationMonths, null)
+        : contract.nextIncreaseDate;
     await ctx.db.patch(id, {
       propertyId: data.propertyId,
       ownerId: data.ownerId,
@@ -138,6 +155,9 @@ export const update = mutation({
       rentAmount: data.rentAmount,
       rentVat: data.rentVat,
       vatRate: data.vatRate,
+      rentIncreaseRate: data.rentIncreaseRate,
+      useTuikInflation: data.useTuikInflation,
+      nextIncreaseDate: nextIncreaseDate ?? undefined,
       depositAmount: data.depositAmount,
       depositMonths: data.depositMonths,
       guarantor: data.guarantor,
@@ -193,6 +213,86 @@ export const remove = mutation({
     }
 
     await ctx.db.delete(id);
+  },
+});
+
+/**
+ * Apply a rent increase from the tracking tile.
+ *
+ * Kontratın kira tutarını günceller, artış oranını ve uygulama tarihini
+ * kaydeder, sonraki artış tarihini 12 ay ileri alır. Gelecek kira
+ * tahakkukları (etkili tarihten itibaren) yeni tutara güncellenir; vadesi
+ * gelmiş tahakkukların cari hesap kayıtları yeni tutarla yeniden işlenir
+ * (kiracı borcu / malik alacağı doğru kalır).
+ */
+export const applyRentIncrease = mutation({
+  args: {
+    contractId: v.id("contracts"),
+    newRentAmount: v.number(),
+    rate: v.number(),
+    effectiveDate: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const actor = await requireActor(ctx);
+    const contract = await ctx.db.get(args.contractId);
+    if (!contract) throw new ConvexError("Kontrat bulunamadı.");
+    await requirePropertyAccess(ctx, actor, contract.propertyId);
+    if (args.rate < 0) {
+      throw new ConvexError("Artış oranı negatif olamaz.");
+    }
+    if (args.newRentAmount <= 0) {
+      throw new ConvexError("Yeni kira tutarı geçerli olmalıdır.");
+    }
+    if (args.effectiveDate < contract.startDate) {
+      throw new ConvexError(
+        "Artış tarihi kontrat başlangıcından önce olamaz.",
+      );
+    }
+
+    const nextIncreaseDate = nextIncreaseDateOf(
+      contract.startDate,
+      contract.durationMonths,
+      contract.nextIncreaseDate,
+    );
+    await ctx.db.patch(contract._id, {
+      rentAmount: args.newRentAmount,
+      rentIncreaseRate: args.rate,
+      lastIncreaseDate: args.effectiveDate,
+      nextIncreaseDate: nextIncreaseDate ?? undefined,
+    });
+
+    // Gelecek kira tahakkuklarını yeni tutara güncelle. Depozito tahakkuku
+    // (type = deposit) kira döngüsüne dahil değildir — dokunulmaz.
+    const startPeriod = periodKey(args.effectiveDate);
+    const accruals = await ctx.db
+      .query("accruals")
+      .withIndex("by_contract", (q) => q.eq("contractId", contract._id))
+      .collect();
+    let updatedAccruals = 0;
+    for (const accrual of accruals) {
+      if ((accrual.type ?? "rent") === "deposit") continue;
+      if (accrual.period < startPeriod) continue;
+      if (accrual.amount === args.newRentAmount) continue;
+      await ctx.db.patch(accrual._id, { amount: args.newRentAmount });
+      updatedAccruals++;
+      // Vadesi gelmiş tahakkukların cari kayıtlarını yeni tutarla yeniden işle
+      // (gelecek aylar vadeye girince cron yeni tutarı işler).
+      if (accrual.dueDate <= Date.now()) {
+        await deleteLedgerForReference(ctx, accrual._id.toString());
+        await postAccrualLedger(ctx, actor, contract, {
+          _id: accrual._id,
+          period: accrual.period,
+          dueDate: accrual.dueDate,
+          amount: args.newRentAmount,
+        });
+      }
+    }
+
+    return {
+      rentAmount: args.newRentAmount,
+      updatedAccruals,
+      nextIncreaseDate: nextIncreaseDate ?? undefined,
+    };
   },
 });
 

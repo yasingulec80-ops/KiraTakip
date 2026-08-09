@@ -83,6 +83,8 @@ interface ContractFormState {
   rentAmount: string;
   rentVat: "dahil" | "haric";
   vatRate: string;
+  rentIncreaseRate: string;
+  useTuikInflation: boolean;
   depositAmount: string;
   depositMonths: string;
   status: "active" | "ended";
@@ -108,6 +110,8 @@ const emptyForm: ContractFormState = {
   rentAmount: "",
   rentVat: "dahil",
   vatRate: "20",
+  rentIncreaseRate: "",
+  useTuikInflation: false,
   depositAmount: "",
   depositMonths: "0",
   status: "active",
@@ -133,6 +137,9 @@ const formFromContract = (c: Contract): ContractFormState => ({
   rentAmount: String(c.rentAmount),
   rentVat: c.rentVat ?? "dahil",
   vatRate: c.vatRate !== undefined ? String(c.vatRate) : "20",
+  rentIncreaseRate:
+    c.rentIncreaseRate !== undefined ? String(c.rentIncreaseRate) : "",
+  useTuikInflation: c.useTuikInflation === true,
   depositAmount: String(c.depositAmount),
   depositMonths: c.depositMonths ? String(c.depositMonths) : "0",
   status: c.status ?? "active",
@@ -318,6 +325,8 @@ export function ContractSection() {
       rentAmount: parseNumber(form.rentAmount) ?? 0,
       rentVat: form.rentVat,
       vatRate: parseNumber(form.vatRate),
+      rentIncreaseRate: parseNumber(form.rentIncreaseRate),
+      useTuikInflation: form.useTuikInflation,
       depositAmount: parseNumber(form.depositAmount) ?? 0,
       depositMonths:
         (parseNumber(form.depositMonths) ?? 0) > 0
@@ -666,6 +675,10 @@ function ContractFormDialog({
   const [error, setError] = useState<string | null>(null);
   const [ozelHukumlerOpen, setOzelHukumlerOpen] = useState(false);
   const [genelKosullarOpen, setGenelKosullarOpen] = useState(false);
+  const tuik = useQuery(api.settings.getTuikInflation);
+  const updateTuik = useMutation(api.settings.updateTuikInflation);
+  const [tuikEdit, setTuikEdit] = useState("");
+  const [tuikEdited, setTuikEdited] = useState(false);
 
   const [lastKey, setLastKey] = useState("");
   const key = open ? (editing ? `edit-${editing._id}` : "new") : "closed";
@@ -673,7 +686,14 @@ function ContractFormDialog({
     setLastKey(key);
     setForm(editing ? formFromContract(editing) : emptyForm);
     setError(null);
+    setTuikEdit("");
+    setTuikEdited(false);
   }
+
+  // TÜFE alanı: kullanıcı düzenlemediyse kayıtlı değer canlı gösterilir.
+  const tuikInputValue = tuikEdited
+    ? tuikEdit
+    : String(tuik?.cpi12MonthAvg ?? 0);
 
   const set = <K extends keyof ContractFormState>(
     key: K,
@@ -1047,6 +1067,114 @@ function ContractFormDialog({
             </div>
           </div>
         )}
+
+        {/* Kira artışı — yıllık artış oranı + TÜFE 12 aylık ortalama tiki */}
+        <div className="space-y-3 border border-border p-4">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="min-w-64 flex-1">
+              <label className="flex cursor-pointer items-start gap-3">
+                <Checkbox
+                  className="mt-0.5"
+                  checked={form.useTuikInflation}
+                  onCheckedChange={(checked) => {
+                    const enabled = checked === true;
+                    setForm((f) => ({
+                      ...f,
+                      useTuikInflation: enabled,
+                      // TÜFE açılınca artış oranı otomatik doldurulur.
+                      rentIncreaseRate:
+                        enabled && f.rentIncreaseRate.trim() === ""
+                          ? String(tuik?.cpi12MonthAvg ?? 0)
+                          : f.rentIncreaseRate,
+                    }));
+                  }}
+                />
+                <span>
+                  <span className="block text-sm font-medium">
+                    TÜFE 12 Aylık Ortalama
+                  </span>
+                  <span className="block text-xs leading-5 text-muted-foreground">
+                    İşaretlendiğinde kira artış oranı TÜFE 12 aylık ortalamasıyla
+                    otomatik doldurulur; yine de değiştirebilirsiniz.
+                  </span>
+                </span>
+              </label>
+            </div>
+            <div className="w-36">
+              <Field
+                label="Kira Artış Oranı"
+                hint="% · yıllık"
+              >
+                <Input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={form.rentIncreaseRate}
+                  onChange={(e) => set("rentIncreaseRate", e.target.value)}
+                  placeholder="0"
+                  className="rounded-none"
+                />
+              </Field>
+            </div>
+          </div>
+          {form.useTuikInflation && (
+            <div className="flex flex-wrap items-end gap-3 bg-muted/30 p-4">
+              <div className="w-44">
+                <Field
+                  label="TÜFE 12 Aylık Ortalama"
+                  hint="% · kayıtlı değer"
+                >
+                  <Input
+                    type="number"
+                    min={0}
+                    max={200}
+                    value={tuikInputValue}
+                    disabled={!isAdmin}
+                    onChange={(e) => {
+                      setTuikEdited(true);
+                      setTuikEdit(e.target.value);
+                    }}
+                    className="rounded-none"
+                  />
+                </Field>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                className="rounded-none"
+                disabled={!isAdmin}
+                onClick={async () => {
+                  const value = parseNumber(tuikInputValue);
+                  if (value === undefined || value < 0) {
+                    setError("TÜFE oranı geçerli bir yüzde olmalıdır.");
+                    return;
+                  }
+                  try {
+                    await updateTuik({ cpi12MonthAvg: value });
+                    setTuikEdited(false);
+                    setForm((f) => ({
+                      ...f,
+                      rentIncreaseRate: f.useTuikInflation
+                        ? String(value)
+                        : f.rentIncreaseRate,
+                    }));
+                    toast.success(
+                      "TÜFE oranı kaydedildi; artış oranı güncellendi.",
+                    );
+                  } catch (err) {
+                    setError(
+                      err instanceof Error ? err.message : "Kayıt başarısız.",
+                    );
+                  }
+                }}
+              >
+                {isAdmin
+                  ? "TÜFE'yi Kaydet"
+                  : "TÜFE yalnızca yönetici tarafından güncellenir"}
+              </Button>
+            </div>
+          )}
+        </div>
 
         <Row cols={2}>
           <Field label="Depozito Tutarı" hint="₺ · kaydedilince otomatik tahakkuk edilir">
@@ -1577,6 +1705,37 @@ function ContractDetailDialog({
             label="Aylık Kira"
             value={`${formatCurrency(contract.rentAmount)}`}
           />
+          {(contract.rentIncreaseRate !== undefined ||
+            contract.nextIncreaseDate ||
+            contract.lastIncreaseDate) && (
+            <DetailRow
+              label="Kira Artışı"
+              value={
+                <span>
+                  {contract.rentIncreaseRate !== undefined && (
+                    <span>
+                      Oran: %{contract.rentIncreaseRate}
+                      {contract.useTuikInflation && (
+                        <span className="ml-1 text-xs text-muted-foreground">
+                          · TÜFE 12 ay ort.
+                        </span>
+                      )}
+                    </span>
+                  )}
+                  {contract.lastIncreaseDate && (
+                    <span className="ml-2 text-xs text-muted-foreground">
+                      Son artış: {formatDate(contract.lastIncreaseDate)}
+                    </span>
+                  )}
+                  {contract.nextIncreaseDate && (
+                    <span className="ml-2 text-xs text-muted-foreground">
+                      Sonraki: {formatDate(contract.nextIncreaseDate)}
+                    </span>
+                  )}
+                </span>
+              }
+            />
+          )}
           <DetailRow
             label="Depozito"
             value={
