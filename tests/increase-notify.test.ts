@@ -61,3 +61,49 @@ describe("increaseNotificationRecipients — artış bildirimi alıcıları", ()
     ]);
   });
 });
+
+describe("increaseNotificationRecipients — hatırlatma ayarları tercihleri", () => {
+  const owner = { name: "Ahmet Yılmaz", email: "ahmet@ornek.com" };
+  const tenant = { name: "Elif Demir", email: "elif@ornek.com" };
+
+  test("tercih verilmezse varsayılan: ikisi de açık", () => {
+    expect(increaseNotificationRecipients(owner, tenant)).toHaveLength(2);
+  });
+
+  test("notifyTenant: false → kiracı atlanır, malik kalır", () => {
+    expect(
+      increaseNotificationRecipients(owner, tenant, { notifyTenant: false }),
+    ).toEqual([
+      { email: "ahmet@ornek.com", name: "Ahmet Yılmaz", role: "owner" },
+    ]);
+  });
+
+  test("notifyOwner: false → malik atlanır, kiracı kalır", () => {
+    expect(
+      increaseNotificationRecipients(owner, tenant, { notifyOwner: false }),
+    ).toEqual([
+      { email: "elif@ornek.com", name: "Elif Demir", role: "tenant" },
+    ]);
+  });
+
+  test("ikisi de kapalı → bildirim planlanmaz (boş liste)", () => {
+    expect(
+      increaseNotificationRecipients(owner, tenant, {
+        notifyTenant: false,
+        notifyOwner: false,
+      }),
+    ).toEqual([]);
+  });
+
+  test("tercih açık ama e-posta yok → yine atlanır (ikisi birden gerekli)", () => {
+    expect(
+      increaseNotificationRecipients(
+        { name: "Ahmet", email: null },
+        tenant,
+        { notifyTenant: true, notifyOwner: true },
+      ),
+    ).toEqual([
+      { email: "elif@ornek.com", name: "Elif Demir", role: "tenant" },
+    ]);
+  });
+});

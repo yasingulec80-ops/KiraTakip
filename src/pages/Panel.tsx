@@ -1207,10 +1207,18 @@ function RentIncreaseDialog({
         rate: rateNum,
         effectiveDate: effectiveMs,
       });
+      // Bildirim alıcıları hatırlatma ayarlarındaki tercihlere göre belirlenir.
+      const roles = result.notifiedRoles ?? [];
+      const notifiedText =
+        roles.length === 2
+          ? " Malik ve kiracıya bildirim e-postası gönderildi."
+          : roles.includes("owner")
+            ? " Malike bildirim e-postası gönderildi."
+            : roles.includes("tenant")
+              ? " Kiracıya bildirim e-postası gönderildi."
+              : "";
       toast.success(
-        result.notifyScheduled
-          ? `Kira artışı uygulandı — yeni kira ${formatCurrency(newRentAmount)}/ay. Malik ve kiracıya bildirim e-postası gönderildi.`
-          : `Kira artışı uygulandı — yeni kira ${formatCurrency(newRentAmount)}/ay.`,
+        `Kira artışı uygulandı — yeni kira ${formatCurrency(newRentAmount)}/ay.${notifiedText}`,
       );
       onClose();
     } catch (err) {

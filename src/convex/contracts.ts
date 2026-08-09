@@ -2,7 +2,7 @@ import { ConvexError, v } from "convex/values";
 import { action, mutation, query } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
-import { internal } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import {
   ROLES,
   contractStatusValidator,
@@ -291,15 +291,20 @@ export const applyRentIncrease = mutation({
     }
 
     // Malik ve kiracıya e-posta bildirimi — mutation commit olduktan sonra
-    // scheduler action'ı tetikler. E-postası olmayan taraf atlanır; e-posta
+    // scheduler action'ı tetikler. Alıcılar hatırlatma ayarlarındaki kiracı/
+    // malik tercihlerine uyar; e-postası olmayan taraf atlanır. E-posta
     // gateway'i (VLY_INTEGRATION_KEY) yapılandırılmamışsa action sessizce no-op.
     const [owner, tenant, property] = await Promise.all([
       ctx.db.get(contract.ownerId),
       ctx.db.get(contract.tenantId),
       ctx.db.get(contract.propertyId),
     ]);
-    const recipients = increaseNotificationRecipients(owner, tenant);
-    let notifyScheduled = false;
+    const notifySettings = await ctx.runQuery(api.settings.getReminderSettings);
+    const recipients = increaseNotificationRecipients(owner, tenant, {
+      notifyTenant: notifySettings.notifyTenant,
+      notifyOwner: notifySettings.notifyOwner,
+    });
+    const notifiedRoles = recipients.map((r) => r.role);
     if (recipients.length > 0) {
       await ctx.scheduler.runAfter(
         0,
@@ -317,14 +322,14 @@ export const applyRentIncrease = mutation({
           nextIncreaseDate: nextIncreaseDate ?? undefined,
         },
       );
-      notifyScheduled = true;
     }
 
     return {
       rentAmount: args.newRentAmount,
       updatedAccruals,
       nextIncreaseDate: nextIncreaseDate ?? undefined,
-      notifyScheduled,
+      notifyScheduled: recipients.length > 0,
+      notifiedRoles,
     };
   },
 });

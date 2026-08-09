@@ -696,7 +696,7 @@ function ReminderSettingsDialog({
       open={open}
       onOpenChange={onOpenChange}
       title="Hatırlatma Ayarları"
-      description="Kira hatırlatma e-postalarının kapsamını ve alıcılarını belirleyin."
+      description="Kira hatırlatma ve kira artışı bildirim e-postalarının alıcılarını belirleyin."
       footer={
         <>
           <Button
@@ -746,7 +746,8 @@ function ReminderSettingsDialog({
             <span>
               <span className="block text-sm font-medium">Kiracı</span>
               <span className="block text-xs text-muted-foreground">
-                E-posta adresi kayıtlı kiracıya hatırlatma gönderilir.
+                E-posta adresi kayıtlı kiracıya kira hatırlatması ve artış
+                bildirimi gönderilir.
               </span>
             </span>
           </label>
@@ -759,7 +760,8 @@ function ReminderSettingsDialog({
             <span>
               <span className="block text-sm font-medium">Malik</span>
               <span className="block text-xs text-muted-foreground">
-                E-posta adresi kayıtlı malike hatırlatma gönderilir.
+                E-posta adresi kayıtlı malike kira hatırlatması ve artış
+                bildirimi gönderilir.
               </span>
             </span>
           </label>
