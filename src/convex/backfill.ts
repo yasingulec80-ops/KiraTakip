@@ -2,6 +2,7 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
 import { mutation } from "./_generated/server";
 import { ROLES } from "./schema";
+import { planBackfill } from "../lib/backfill-rules";
 
 /**
  * ONE-TIME BACKFILL — kişi ⇄ şirket dönüşüm temizliği.
@@ -14,8 +15,8 @@ import { ROLES } from "./schema";
  * - `isCompany !== true` (kişi) kayıtlarında şirket alanları
  *   (`taxOffice`, `taxNumber`, `signatoryName`, `signatoryTcNo`) varsa silinir.
  *
- * Yalnızca yönetici çalıştırabilir ve yalnızca gerçekten değişiklik gereken
- * kayıtları günceller. Kimlik doğrulama gerektirir (oturum açık olmalıdır).
+ * Karar mantığı `src/lib/backfill-rules.ts` içindeki saf fonksiyonlardan gelir
+ * (tek kaynak, birim testli). Yalnızca yönetici çalıştırabilir.
  *
  * Çağrılar:
  *   bunx convex run backfill:stripStaleCompanyFields '{"dryRun":true}'  → sadece sayar, yazmaz
@@ -34,62 +35,22 @@ export const stripStaleCompanyFields = mutation({
       );
     }
 
-    let ownersClearedTc = 0;
-    let ownersClearedTax = 0;
-    let tenantsClearedTc = 0;
-    let tenantsClearedTax = 0;
-
-    /* ----------------------------- Malikler ----------------------------- */
     const owners = await ctx.db.query("owners").collect();
-    for (const owner of owners) {
-      if (owner.isCompany === true && owner.tcNo) {
-        if (!dryRun) await ctx.db.patch(owner._id, { tcNo: null as any });
-        ownersClearedTc++;
-      } else if (
-        owner.isCompany !== true &&
-        (owner.taxOffice || owner.taxNumber || owner.signatoryName || owner.signatoryTcNo)
-      ) {
-        if (!dryRun) {
-          await ctx.db.patch(owner._id, {
-            taxOffice: null as any,
-            taxNumber: null as any,
-            signatoryName: null as any,
-            signatoryTcNo: null as any,
-          });
-        }
-        ownersClearedTax++;
-      }
-    }
-
-    /* ----------------------------- Kiracılar ---------------------------- */
     const tenants = await ctx.db.query("tenants").collect();
-    for (const tenant of tenants) {
-      if (tenant.isCompany === true && tenant.tcNo) {
-        if (!dryRun) await ctx.db.patch(tenant._id, { tcNo: null as any });
-        tenantsClearedTc++;
-      } else if (
-        tenant.isCompany !== true &&
-        (tenant.taxOffice || tenant.taxNumber || tenant.signatoryName || tenant.signatoryTcNo)
-      ) {
-        if (!dryRun) {
-          await ctx.db.patch(tenant._id, {
-            taxOffice: null as any,
-            taxNumber: null as any,
-            signatoryName: null as any,
-            signatoryTcNo: null as any,
-          });
-        }
-        tenantsClearedTax++;
+
+    const plan = planBackfill(
+      owners.map((o) => ({ id: o._id, ...o })),
+      tenants.map((t) => ({ id: t._id, ...t })),
+      dryRun,
+    );
+
+    // Dry-run'da plan hiç yama üretmez — bu döngü çalışacak hiçbir şey bulamaz.
+    if (!dryRun) {
+      for (const write of plan.writes) {
+        await ctx.db.patch(write.id as never, write.patch as never);
       }
     }
 
-    return {
-      dryRun,
-      ownersClearedTc,
-      ownersClearedTax,
-      tenantsClearedTc,
-      tenantsClearedTax,
-      totalCleared: ownersClearedTc + ownersClearedTax + tenantsClearedTc + tenantsClearedTax,
-    };
+    return { dryRun, ...plan.summary };
   },
 });
