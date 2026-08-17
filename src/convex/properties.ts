@@ -2,7 +2,7 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
-import { ROLES, fixtureValidator } from "./schema";
+import { ROLES, coOwnerValidator, fixtureValidator } from "./schema";
 
 /** Resolve the acting user, or null when not signed in. */
 const getActor = async (ctx: any): Promise<Doc<"users"> | null> => {
@@ -13,6 +13,8 @@ const getActor = async (ctx: any): Promise<Doc<"users"> | null> => {
 
 const propertyArgs = {
   ownerId: v.optional(v.id("owners")),
+  ownerShare: v.optional(v.number()), // ana malikin hisse oranı (%)
+  coOwners: v.optional(v.array(coOwnerValidator)), // diğer hissedarlar
   name: v.string(),
   address: v.string(),
   m2: v.optional(v.number()),

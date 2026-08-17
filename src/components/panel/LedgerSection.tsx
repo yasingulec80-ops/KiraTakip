@@ -75,9 +75,12 @@ const PERSON_TYPE_LABEL: Record<PersonType, string> = {
 const KIND_LABEL: Record<string, string> = {
   accrual: "Tahakkuk",
   collection: "Tahsilat",
+  payment: "Ödeme",
   expense: "Masraf",
   adjustment: "Düzeltme",
   depositReturn: "Depozito İadesi",
+  depositOwnerPayment: "Depozito — Malike Ödeme",
+  depositWriteOff: "Depozito — Mahsup",
   transfer: "Devir",
 };
 
@@ -832,7 +835,7 @@ function PersonDetailDialog({
 /* ------------------------------------------------------------------ */
 
 interface ManualEntryState {
-  kind: "accrual" | "collection" | "expense" | "adjustment";
+  kind: "accrual" | "collection" | "payment" | "expense" | "adjustment";
   personType: PersonType;
   personId: string;
   amount: string;
@@ -846,7 +849,8 @@ interface ManualEntryState {
 
 const KIND_OPTIONS: { id: ManualEntryState["kind"]; label: string; desc: string }[] = [
   { id: "accrual", label: "Tahakkuk", desc: "Kira tahakkuku işler (kontrat gerekir)." },
-  { id: "collection", label: "Tahsilat / Ödeme", desc: "Ödeme alındığında kaydedilir (kontrat gerekir)." },
+  { id: "collection", label: "Tahsilat", desc: "Kiracı veya vekilden para alındığında kaydedilir (kontrat gerekir)." },
+  { id: "payment", label: "Ödeme", desc: "Kişiye yapılan ödeme kaydı (malike ödeme, iade vb.). Kişinin hesabı borçlanır." },
   { id: "expense", label: "Masraf", desc: "Gayrimenkul masrafı işlenir." },
   { id: "adjustment", label: "Düzeltme", desc: "Manuel alacak veya borç kaydı." },
 ];
@@ -923,6 +927,18 @@ function ManualEntryDialog({
 
   const proxyOwners = owners.filter((o) => o.proxy !== null);
 
+  // Kontrat seçiminde anlaşılır bilgi göstermek için gayrimenkul / kiracı haritaları.
+  const propertyMap = useMemo(() => {
+    const map = new Map<string, Property>();
+    properties.forEach((p) => map.set(p._id.toString(), p));
+    return map;
+  }, [properties]);
+  const tenantMap = useMemo(() => {
+    const map = new Map<string, Tenant>();
+    tenants.forEach((t) => map.set(t._id.toString(), t));
+    return map;
+  }, [tenants]);
+
   const personOptions = (personType: PersonType): (Owner | Tenant)[] => {
     if (personType === "owner") return owners;
     if (personType === "tenant") return tenants;
@@ -961,7 +977,9 @@ function ManualEntryDialog({
         ? form.direction === "borc"
           ? -amount
           : amount
-        : amount;
+        : form.kind === "payment"
+          ? -amount
+          : amount;
 
     setSaving(true);
     try {
@@ -1171,23 +1189,50 @@ function ManualEntryDialog({
         )}
 
         {(form.kind === "accrual" || form.kind === "collection") && (
-          <Field label="Kontrat" required>
-            <Select
-              value={form.contractId}
-              onValueChange={(value) => set("contractId", value)}
-            >
-              <SelectTrigger className="rounded-none">
-                <SelectValue placeholder="Kontrat seçin" />
-              </SelectTrigger>
-              <SelectContent>
-                {contracts.map((c) => (
-                  <SelectItem key={c._id} value={c._id}>
-                    {c._id.toString().slice(0, 8)}… · {formatDate(c.startDate)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
+          <>
+            <Field label="Kontrat" required hint="gayrimenkul · kiracı">
+              <Select
+                value={form.contractId}
+                onValueChange={(value) => set("contractId", value)}
+              >
+                <SelectTrigger className="rounded-none">
+                  <SelectValue placeholder="Kontrat seçin" />
+                </SelectTrigger>
+                <SelectContent>
+                  {contracts.map((c) => {
+                    const property = propertyMap.get(
+                      c.propertyId.toString(),
+                    );
+                    const tenant = tenantMap.get(c.tenantId.toString());
+                    return (
+                      <SelectItem key={c._id} value={c._id}>
+                        {property?.name ?? "Gayrimenkul"} ·{" "}
+                        {tenant?.name ?? "Kiracı"}
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            </Field>
+            {form.contractId !== "" &&
+              (() => {
+                const contract = contracts.find(
+                  (c) => c._id.toString() === form.contractId,
+                );
+                if (!contract) return null;
+                const property = propertyMap.get(
+                  contract.propertyId.toString(),
+                );
+                return (
+                  <p className="-mt-2 text-xs leading-5 text-muted-foreground">
+                    {property?.address ?? ""}
+                    {property?.address ? " · " : ""}
+                    başlangıç {formatDate(contract.startDate)} · aylık{" "}
+                    {formatCurrency(contract.rentAmount)}
+                  </p>
+                );
+              })()}
+          </>
         )}
 
         {form.kind === "expense" && form.propertyId !== "" && (
@@ -1219,11 +1264,17 @@ function ManualEntryDialog({
                   <SelectValue placeholder="Bağlamayın" />
                 </SelectTrigger>
                 <SelectContent>
-                  {propertyContracts.map((c) => (
-                    <SelectItem key={c._id} value={c._id}>
-                      {formatDate(c.startDate)} başlangıçlı
-                    </SelectItem>
-                  ))}
+                  {propertyContracts.map((c) => {
+                    const tenant = tenantMap.get(c.tenantId.toString());
+                    return (
+                      <SelectItem key={c._id} value={c._id}>
+                        {propertyMap.get(c.propertyId.toString())?.name ??
+                          "Gayrimenkul"}{" "}
+                        · {tenant?.name ?? "Kiracı"} ·{" "}
+                        {formatDate(c.startDate)}
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             </Field>

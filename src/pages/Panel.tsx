@@ -16,6 +16,13 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 import { KpiGrid, type KpiTile } from "@/components/panel/KpiGrid";
 import {
+  DEPOSIT_STATUS_LABEL,
+  depositCollectedOf,
+  depositDisposalOf,
+  depositStatusOf as sharedDepositStatusOf,
+  depositTotalsOf,
+} from "@/lib/deposit-math";
+import {
   INCREASE_LOOKAHEAD_DAYS,
   effectiveNextIncreaseDate,
   increasedRent,
@@ -94,6 +101,7 @@ export default function Panel() {
   const contracts = useQuery(api.contracts.list);
   const accruals = useQuery(api.accruals.list);
   const collections = useQuery(api.collections.list);
+  const ledgerEntries = useQuery(api.ledgers.list);
 
   const initialTab = searchParams.get("tab");
   const [activeTab, setActiveTabState] = useState<TabId>(
@@ -120,9 +128,13 @@ export default function Panel() {
     const increaseDueContracts = activeContracts.filter((c) =>
       isIncreaseDue(effectiveNextIncreaseDate(c), nowMs),
     );
-    const totalDeposits = (contracts ?? [])
-      .filter((c) => !c.depositReturnedAt)
-      .reduce((sum, c) => sum + c.depositAmount, 0);
+    // Elde tutulan depozito yalnızca tahsilatı yapılan kısmı içerir;
+    // ödeme bekleyen (henüz tahsil edilmemiş) depozitolar sayılmaz.
+    const depositTotals = depositTotalsOf(
+      contracts ?? [],
+      collections ?? [],
+      ledgerEntries ?? [],
+    );
 
     const paidPerAccrual = new Map<string, number>();
     (collections ?? []).forEach((c) => {
@@ -180,8 +192,8 @@ export default function Panel() {
       {
         id: "deposits",
         label: "Depozitolar",
-        value: money(totalDeposits),
-        caption: "elde tutulan depozito",
+        value: money(depositTotals.held),
+        caption: "tahsil edilip elde tutulan",
       },
       {
         id: "pendingRents",
@@ -208,7 +220,7 @@ export default function Panel() {
         caption: "kiracı kaydı",
       },
     ];
-  }, [properties, owners, tenants, contracts, accruals, collections]);
+  }, [properties, owners, tenants, contracts, accruals, collections, ledgerEntries]);
 
   const [detailTile, setDetailTile] = useState<string | null>(null);
 
@@ -344,6 +356,7 @@ export default function Panel() {
             contracts={contracts ?? []}
             accruals={accruals ?? []}
             collections={collections ?? []}
+            ledgerEntries={ledgerEntries ?? []}
           />
 
           {/* Section header rule */}
@@ -458,6 +471,7 @@ function OverviewDetailDialog({
   contracts,
   accruals,
   collections,
+  ledgerEntries,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -469,6 +483,7 @@ function OverviewDetailDialog({
   contracts: Doc<"contracts">[];
   accruals: Doc<"accruals">[];
   collections: Doc<"collections">[];
+  ledgerEntries: Doc<"ledgerEntries">[];
 }) {
   const ownerMap = useMemo(() => {
     const map = new Map<string, Doc<"owners">>();
@@ -537,6 +552,7 @@ function OverviewDetailDialog({
           <DepositDetailList
             contracts={contracts}
             collections={collections}
+            ledgerEntries={ledgerEntries}
             propertyMap={propertyMap}
           />
         )}
@@ -670,86 +686,79 @@ function ContractDetailList({
   );
 }
 
-const DEPOSIT_STATUS_LABEL: Record<string, string> = {
-  pending: "Ödeme Bekliyor",
-  paid: "Tahsil Edildi",
-  held: "Elde Tutuluyor",
-  returned: "İade Edildi",
-};
-
-/**
- * Depozito durumu kontrat üzerinden seçilmez; tahakkuk ve tahsilatlardan
- * türetilir: iade edildi → tahsil edildi (depozito tahsilatı tutarı
- * karşılıyor) → ödeme bekliyor.
- */
-const depositStatusOf = (
-  contract: Doc<"contracts">,
-  collectedByContract: Map<string, number>,
-): string => {
-  if (contract.depositReturnedAt || contract.depositStatus === "returned") {
-    return "returned";
-  }
-  const collected = collectedByContract.get(contract._id.toString()) ?? 0;
-  if (collected >= (contract.depositAmount ?? 0)) return "paid";
-  return "pending";
-};
-
 function DepositDetailList({
   contracts,
   collections,
+  ledgerEntries,
   propertyMap,
 }: {
   contracts: Doc<"contracts">[];
   collections: Doc<"collections">[];
+  ledgerEntries: Doc<"ledgerEntries">[];
   propertyMap: Map<string, Doc<"properties">>;
 }) {
-  const collectedByContract = useMemo(() => {
-    const map = new Map<string, number>();
-    collections.forEach((c) => {
-      if ((c.collectionType ?? "rent") !== "deposit") return;
-      const key = c.contractId.toString();
-      map.set(key, (map.get(key) ?? 0) + c.amount);
-    });
-    return map;
-  }, [collections]);
-  const total = contracts.reduce((s, c) => s + c.depositAmount, 0);
+  const totals = useMemo(
+    () => depositTotalsOf(contracts, collections, ledgerEntries),
+    [contracts, collections, ledgerEntries],
+  );
   return (
     <div>
-      <DetailTable headers={["Gayrimenkul", "Depozito", "Durum"]}>
-        {contracts.map((c) => {
-          const status = depositStatusOf(c, collectedByContract);
-          return (
-            <TableRow key={c._id}>
-              <TableCell className="font-medium">
-                {propertyMap.get(c.propertyId.toString())?.name ?? "—"}
-              </TableCell>
-              <TableCell className="text-sm tabular-nums">
-                {formatCurrency(c.depositAmount)}
-              </TableCell>
-              <TableCell>
-                <Badge
-                  variant={
-                    status === "returned"
-                      ? "outline"
-                      : status === "held"
-                        ? "secondary"
-                        : "default"
-                  }
-                  className="rounded-none"
-                >
-                  {DEPOSIT_STATUS_LABEL[status]}
-                </Badge>
-              </TableCell>
-            </TableRow>
-          );
-        })}
+      <DetailTable headers={["Gayrimenkul", "Depozito", "Tahsil Edilen", "Durum"]}>
+        {contracts
+          .filter((c) => c.depositAmount > 0)
+          .map((c) => {
+            const collected = depositCollectedOf(collections, c._id);
+            const disposal = depositDisposalOf(ledgerEntries, c._id);
+            const status = sharedDepositStatusOf(c, collected, disposal);
+            return (
+              <TableRow key={c._id}>
+                <TableCell className="font-medium">
+                  {propertyMap.get(c.propertyId.toString())?.name ?? "—"}
+                </TableCell>
+                <TableCell className="text-sm tabular-nums">
+                  {formatCurrency(c.depositAmount)}
+                </TableCell>
+                <TableCell className="text-sm tabular-nums">
+                  {collected > 0 ? (
+                    <span className="text-emerald-700">
+                      {formatCurrency(collected)}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </TableCell>
+                <TableCell>
+                  <Badge
+                    variant={status === "returned" ? "outline" : "secondary"}
+                    className="rounded-none"
+                  >
+                    {DEPOSIT_STATUS_LABEL[status]}
+                  </Badge>
+                </TableCell>
+              </TableRow>
+            );
+          })}
       </DetailTable>
-      <p className="mt-3 text-sm text-muted-foreground">
-        Toplam depozito:{" "}
-        <span className="font-medium text-foreground">
-          {formatCurrency(total)}
+      <div className="mt-3 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 text-sm text-muted-foreground">
+        <span>
+          Toplam depozito:{" "}
+          <span className="font-medium text-foreground">
+            {formatCurrency(totals.total)}
+          </span>
         </span>
-      </p>
+        <span>
+          Elde tutulan (tahsil edilen):{" "}
+          <span className="font-medium text-emerald-700">
+            {formatCurrency(totals.held)}
+          </span>
+        </span>
+        <span>
+          İade edilen:{" "}
+          <span className="font-medium text-foreground">
+            {formatCurrency(totals.returned)}
+          </span>
+        </span>
+      </div>
     </div>
   );
 }

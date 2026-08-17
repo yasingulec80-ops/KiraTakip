@@ -152,6 +152,25 @@ export const createManual = mutation({
       return collectionId;
     }
 
+    if (args.kind === "payment") {
+      // Kişiye yapılan ödeme (malike ödeme, iade vb.) — kişinin cari hesabı borçlanır.
+      await postLedgerEntry(ctx, actor, {
+        propertyId: args.propertyId,
+        contractId: args.contractId,
+        personType: args.personType,
+        personId: args.personId,
+        ownerId:
+          args.personType === "proxy"
+            ? (args.personId as Id<"owners">)
+            : undefined,
+        kind: "payment",
+        amount: -Math.abs(args.amount),
+        description: args.description,
+        date: args.date,
+      });
+      return true;
+    }
+
     if (args.kind === "expense") {
       const propertyId = args.propertyId;
       if (!propertyId) throw new ConvexError("Masraf için gayrimenkul seçilmelidir.");

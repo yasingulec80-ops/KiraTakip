@@ -25,14 +25,25 @@ import {
   formatCurrency,
   formatDate,
   parseDateInput,
+  parseNumber,
   printReport,
 } from "@/lib/export";
+import {
+  DEPOSIT_STATUS_LABEL,
+  depositCollectedOf,
+  depositDisposalOf,
+  depositHeldOf,
+  depositRemainingOf,
+  depositStatusOf,
+  depositTotalsOf,
+  type DepositStatus,
+} from "@/lib/deposit-math";
 import { useMutation, useQuery } from "convex/react";
 
-import { Banknote, RotateCcw } from "lucide-react";
+import { Banknote, Plus, RotateCcw } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { DialogShell, Field } from "./fields";
+import { DialogShell, Field, Row } from "./fields";
 import { SectionToolbar } from "./SectionToolbar";
 
 type Contract = Doc<"contracts">;
@@ -42,36 +53,12 @@ type Tenant = Doc<"tenants">;
 
 const TODAY = dateToInput(Date.now());
 
-const DEPOSIT_STATUS_LABEL: Record<string, string> = {
-  pending: "Ödeme bekliyor",
-  paid: "Tahsil edildi",
-  held: "Elde tutuluyor",
-  returned: "İade edildi",
-};
-
-/**
- * Depozito durumu artık kontrat üzerinden seçilmez; kontrat kaydedildiğinde
- * otomatik depozito tahakkuku oluşur ve durum cari kayıtlardan türetilir:
- * iade edildi → tahsil edildi (depozito tahsilatları tutarı karşılıyor) →
- * ödeme bekliyor (yalnızca tahakkuk işlenmiş).
- */
-const depositStatusOf = (
-  contract: Contract,
-  collectedByContract: Map<string, number>,
-): string => {
-  if (contract.depositReturnedAt || contract.depositStatus === "returned") {
-    return "returned";
-  }
-  const collected = collectedByContract.get(contract._id.toString()) ?? 0;
-  if (collected >= (contract.depositAmount ?? 0)) return "paid";
-  return "pending";
-};
-
 const CSV_HEADERS = [
   "Gayrimenkul",
   "Malik",
   "Kiracı",
   "Depozito",
+  "Tahsil Edilen",
   "Durum",
   "Sözleşme Başlangıcı",
   "İade Tarihi",
@@ -86,13 +73,17 @@ export function DepositSection() {
   const owners = useQuery(api.owners.list);
   const tenants = useQuery(api.tenants.list);
   const collections = useQuery(api.collections.list);
+  const ledgerEntries = useQuery(api.ledgers.list);
   const returnDeposit = useMutation(api.contracts.returnDeposit);
+  const createDepositRecord = useMutation(api.deposits.createDepositRecord);
 
   const [search, setSearch] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [returning, setReturning] = useState<Contract | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
+  const [recordContractId, setRecordContractId] = useState("");
 
   const propertyMap = useMemo(() => {
     const map = new Map<string, Property>();
@@ -110,21 +101,41 @@ export function DepositSection() {
     return map;
   }, [tenants]);
 
-  // Kontrat başına tahsil edilen depozito toplamı (depozito türündeki tahsilatlar).
-  const depositCollectedByContract = useMemo(() => {
-    const map = new Map<string, number>();
-    (collections ?? []).forEach((c) => {
-      if ((c.collectionType ?? "rent") !== "deposit") return;
-      const key = c.contractId.toString();
-      map.set(key, (map.get(key) ?? 0) + c.amount);
-    });
-    return map;
-  }, [collections]);
-
   const depositContracts = useMemo(
     () => (contracts ?? []).filter((c) => c.depositAmount > 0),
     [contracts],
   );
+
+  /** Kontrat başına tahsil edilen / dağıtılan tutarlar. */
+  const positionsByContract = useMemo(() => {
+    const map = new Map<
+      string,
+      { collected: number; disposal: ReturnType<typeof depositDisposalOf> }
+    >();
+    for (const c of depositContracts) {
+      const key = c._id.toString();
+      map.set(key, {
+        collected: depositCollectedOf(collections ?? [], c._id),
+        disposal: depositDisposalOf(ledgerEntries ?? [], c._id),
+      });
+    }
+    return map;
+  }, [depositContracts, collections, ledgerEntries]);
+
+  const heldOf = (c: Contract): number => {
+    const pos = positionsByContract.get(c._id.toString());
+    if (!pos) return 0;
+    return depositHeldOf(pos.collected, pos.disposal);
+  };
+
+  const statusOf = (c: Contract): DepositStatus => {
+    const pos = positionsByContract.get(c._id.toString());
+    if (!pos) return "pending";
+    return depositStatusOf(c, pos.collected, pos.disposal);
+  };
+
+  const collectedOf = (c: Contract): number =>
+    positionsByContract.get(c._id.toString())?.collected ?? 0;
 
   const filtered = useMemo(() => {
     const fromMs = from ? new Date(`${from}T00:00:00`).getTime() : null;
@@ -134,7 +145,7 @@ export function DepositSection() {
     return depositContracts.filter((c) => {
       if (fromMs !== null && c.startDate < fromMs) return false;
       if (toMs !== null && c.startDate > toMs) return false;
-      const status = depositStatusOf(c, depositCollectedByContract);
+      const status = statusOf(c);
       if (statusFilter === "held" && status === "returned") return false;
       if (statusFilter === "returned" && status !== "returned") return false;
       if (q === "") return true;
@@ -159,7 +170,7 @@ export function DepositSection() {
     propertyMap,
     ownerMap,
     tenantMap,
-    depositCollectedByContract,
+    positionsByContract,
     search,
     from,
     to,
@@ -167,23 +178,13 @@ export function DepositSection() {
   ]);
 
   const totals = useMemo(
-    () => ({
-      total: depositContracts.reduce((sum, c) => sum + c.depositAmount, 0),
-      held: depositContracts
-        .filter(
-          (c) => depositStatusOf(c, depositCollectedByContract) !== "returned",
-        )
-        .reduce((sum, c) => sum + c.depositAmount, 0),
-      returned: depositContracts
-        .filter(
-          (c) => depositStatusOf(c, depositCollectedByContract) === "returned",
-        )
-        .reduce((sum, c) => sum + c.depositAmount, 0),
-      pendingCount: depositContracts.filter(
-        (c) => depositStatusOf(c, depositCollectedByContract) !== "returned",
-      ).length,
-    }),
-    [depositContracts, depositCollectedByContract],
+    () =>
+      depositTotalsOf(
+        depositContracts,
+        collections ?? [],
+        ledgerEntries ?? [],
+      ),
+    [depositContracts, collections, ledgerEntries],
   );
 
   const rows = (c: Contract): (string | number | null)[] => {
@@ -195,7 +196,8 @@ export function DepositSection() {
       owner?.name ?? "—",
       tenant?.name ?? "—",
       c.depositAmount,
-      DEPOSIT_STATUS_LABEL[depositStatusOf(c, depositCollectedByContract)],
+      collectedOf(c),
+      DEPOSIT_STATUS_LABEL[statusOf(c)],
       formatDate(c.startDate),
       c.depositReturnedAt ? formatDate(c.depositReturnedAt) : "",
       c.depositNote ?? "",
@@ -243,6 +245,50 @@ export function DepositSection() {
     }
   };
 
+  const handleSaveRecord = async (form: DepositRecordState) => {
+    const date = parseDateInput(form.date);
+    if (!form.contractId || !date) {
+      toast.error("Kontrat ve kayıt tarihi zorunludur.");
+      return;
+    }
+    const amount = parseNumber(form.amount);
+    if (amount === undefined || amount <= 0) {
+      toast.error("Tutar geçerli bir değer olmalıdır.");
+      return;
+    }
+    try {
+      await createDepositRecord({
+        contractId: form.contractId as Id<"contracts">,
+        action: form.action,
+        amount,
+        date,
+        note: form.note.trim() || undefined,
+        collectedByProxyOwnerId: form.collectedByProxyOwnerId
+          ? (form.collectedByProxyOwnerId as Id<"owners">)
+          : undefined,
+        category:
+          form.action === "mahsup"
+            ? (form.category as
+                | "aidat"
+                | "yatirim"
+                | "sigorta"
+                | "tadilat"
+                | "boya"
+                | "diger")
+            : undefined,
+        description:
+          form.action === "mahsup"
+            ? form.description.trim() || undefined
+            : undefined,
+      });
+      toast.success("Depozito kaydı işlendi ve cari hesaplara kaydedildi.");
+      setFormOpen(false);
+      setRecordContractId("");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "İşlem başarısız.");
+    }
+  };
+
   const returningProperty = returning
     ? propertyMap.get(returning.propertyId.toString())
     : undefined;
@@ -279,7 +325,7 @@ export function DepositSection() {
     <section className="space-y-6">
       <SectionToolbar
         title="Depozitolar"
-        hint="Sözleşme bazında depozito takibi ve iade işlemleri"
+        hint="Sözleşme bazında depozito takibi, tahsilat ve dağıtım işlemleri"
         count={filtered.length}
         search={search}
         onSearchChange={setSearch}
@@ -294,10 +340,15 @@ export function DepositSection() {
         }}
         onExportCsv={exportCsv}
         onExportPdf={exportPdf}
+        addLabel="Yeni Kayıt"
+        onAdd={() => {
+          setRecordContractId("");
+          setFormOpen(true);
+        }}
       />
 
-      {/* Özet şeridi */}
-      <div className="grid gap-px border border-border bg-border sm:grid-cols-2 lg:grid-cols-4">
+      {/* Özet şeridi — elde tutulan yalnızca tahsilatı yapılan kısmı içerir. */}
+      <div className="grid gap-px border border-border bg-border sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <div className="bg-card p-5">
           <p className="eyebrow text-muted-foreground">Toplam Depozito</p>
           <p className="mt-2 font-display text-2xl font-light tabular-nums">
@@ -305,9 +356,12 @@ export function DepositSection() {
           </p>
         </div>
         <div className="bg-card p-5">
-          <p className="eyebrow text-muted-foreground">Elde Tutulan</p>
-          <p className="mt-2 font-display text-2xl font-light tabular-nums">
+          <p className="eyebrow text-emerald-700">Elde Tutulan</p>
+          <p className="mt-2 font-display text-2xl font-light tabular-nums text-emerald-700">
             {formatCurrency(totals.held)}
+          </p>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">
+            {totals.heldCount} kontrat · yalnızca tahsil edilenler
           </p>
         </div>
         <div className="bg-card p-5">
@@ -317,9 +371,24 @@ export function DepositSection() {
           </p>
         </div>
         <div className="bg-card p-5">
-          <p className="eyebrow text-muted-foreground">İade Bekleyen Kontrat</p>
+          <p className="eyebrow text-muted-foreground">Malike Ödenen</p>
           <p className="mt-2 font-display text-2xl font-light tabular-nums">
-            {totals.pendingCount}
+            {formatCurrency(totals.paidToOwner)}
+          </p>
+        </div>
+        <div className="bg-card p-5">
+          <p className="eyebrow text-muted-foreground">Mahsup Edilen</p>
+          <p className="mt-2 font-display text-2xl font-light tabular-nums">
+            {formatCurrency(totals.writtenOff)}
+          </p>
+        </div>
+        <div className="bg-card p-5">
+          <p className="eyebrow text-amber-700">Ödeme Bekleyen</p>
+          <p className="mt-2 font-display text-2xl font-light tabular-nums text-amber-700">
+            {formatCurrency(totals.pending)}
+          </p>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">
+            {totals.pendingCount} kontrat · henüz tahsil edilmemiş
           </p>
         </div>
       </div>
@@ -337,7 +406,7 @@ export function DepositSection() {
             <EmptyTitle>Kayıt bulunamadı</EmptyTitle>
             <EmptyDescription>
               {depositContracts.length === 0
-                ? "Henüz depozito kaydı yok. Kontrat kaydedildiğinde depozito tahakkuku otomatik oluşturulur ve burada izlenir."
+                ? "Henüz depozito kaydı yok. Kontrat kaydedildiğinde burada izlenir; “Yeni Kayıt” ile tahsilat, iade, malike ödeme veya mahsup işleyebilirsiniz."
                 : "Arama, tarih aralığı veya durum filtrelerine uyan kayıt yok."}
             </EmptyDescription>
           </EmptyHeader>
@@ -352,6 +421,7 @@ export function DepositSection() {
                   <TableHead>Malik</TableHead>
                   <TableHead>Kiracı</TableHead>
                   <TableHead className="text-right">Depozito</TableHead>
+                  <TableHead className="text-right">Tahsil Edilen</TableHead>
                   <TableHead>Durum</TableHead>
                   <TableHead>İade Tarihi</TableHead>
                   <TableHead className="max-w-40">İade Notu</TableHead>
@@ -363,7 +433,8 @@ export function DepositSection() {
                   const property = propertyMap.get(c.propertyId.toString());
                   const owner = ownerMap.get(c.ownerId.toString());
                   const tenant = tenantMap.get(c.tenantId.toString());
-                  const status = depositStatusOf(c, depositCollectedByContract);
+                  const status = statusOf(c);
+                  const held = heldOf(c);
                   return (
                     <TableRow key={c._id} className="align-middle">
                       <TableCell>
@@ -377,13 +448,26 @@ export function DepositSection() {
                       <TableCell className="text-right font-medium tabular-nums">
                         {formatCurrency(c.depositAmount)}
                       </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {collectedOf(c) > 0 ? (
+                          <span className="text-emerald-700">
+                            {formatCurrency(collectedOf(c))}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
                       <TableCell>
                         <Badge
-                          variant={status === "returned" ? "secondary" : "default"}
+                          variant={
+                            status === "returned" ? "secondary" : "outline"
+                          }
                           className={[
                             "rounded-none",
-                            status === "pending" && "bg-amber-50 text-amber-700",
-                            status === "held" && "bg-muted text-muted-foreground",
+                            (status === "pending" || status === "partial") &&
+                              "bg-amber-50 text-amber-700",
+                            status === "paid" &&
+                              "bg-emerald-50 text-emerald-700",
                             status === "returned" && "text-muted-foreground",
                           ]
                             .filter(Boolean)
@@ -399,20 +483,34 @@ export function DepositSection() {
                         {c.depositNote ?? "—"}
                       </TableCell>
                       <TableCell className="text-right">
-                        {status !== "returned" ? (
+                        <div className="flex items-center justify-end gap-1">
                           <Button
                             type="button"
-                            variant="outline"
-                            size="sm"
-                            className="rounded-none"
-                            onClick={() => setReturning(c)}
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 rounded-none"
+                            onClick={() => {
+                              setRecordContractId(c._id.toString());
+                              setFormOpen(true);
+                            }}
+                            aria-label="Kayıt gir"
+                            title="Kayıt gir (tahsil / iade / malike ödeme / mahsup)"
                           >
-                            <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
-                            İade Et
+                            <Plus className="h-4 w-4" />
                           </Button>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        )}
+                          {held > 0 && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="rounded-none"
+                              onClick={() => setReturning(c)}
+                            >
+                              <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+                              İade Et
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   );
@@ -430,13 +528,13 @@ export function DepositSection() {
                 value={statusFilter}
                 onValueChange={(value) => setStatusFilter(value as StatusFilter)}
               >
-                <SelectTrigger className="h-8 w-40 rounded-none">
+                <SelectTrigger className="h-8 w-44 rounded-none">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Tümü</SelectItem>
                   <SelectItem value="held">Elde tutulanlar</SelectItem>
-                  <SelectItem value="returned">İade edilenler</SelectItem>
+                  <SelectItem value="returned">İade / dağıtılanlar</SelectItem>
                 </SelectContent>
               </Select>
             </label>
@@ -451,6 +549,21 @@ export function DepositSection() {
         collectingVekils={returningCollectingVekils}
         onOpenChange={(open) => !open && setReturning(null)}
         onConfirm={handleReturn}
+      />
+
+      <DepositRecordDialog
+        open={formOpen}
+        onOpenChange={(open) => {
+          setFormOpen(open);
+          if (!open) setRecordContractId("");
+        }}
+        initialContractId={recordContractId}
+        contracts={depositContracts}
+        propertyMap={propertyMap}
+        tenantMap={tenantMap}
+        owners={owners ?? []}
+        positionsByContract={positionsByContract}
+        onSave={handleSaveRecord}
       />
     </section>
   );
@@ -591,6 +704,320 @@ function DepositReturnDialog({
             malike devredebilir.
           </p>
         )}
+      </div>
+    </DialogShell>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+
+interface DepositRecordState {
+  action: "tahsil" | "iade" | "malikeOdeme" | "mahsup";
+  contractId: string;
+  amount: string;
+  date: string;
+  note: string;
+  collectedByProxyOwnerId: string; // tahsil — tahsilatı yapan vekil
+  category: string; // mahsup — masraf kalemi
+  description: string; // mahsup — açıklama
+}
+
+const ACTION_OPTIONS: {
+  id: DepositRecordState["action"];
+  label: string;
+  desc: string;
+}[] = [
+  { id: "tahsil", label: "Tahsil", desc: "Kiracı depozitoyu öder; cari hesaplara işlenir." },
+  { id: "iade", label: "İade", desc: "Tahsil edilen depozito kiracıya iade edilir." },
+  { id: "malikeOdeme", label: "Malike Ödeme", desc: "Tahsil edilen depozito malike ödenir." },
+  { id: "mahsup", label: "Zarara / Gidere Mahsup", desc: "Depozito zarar veya gidere sayılır; masraf kaydı oluşur." },
+];
+
+function DepositRecordDialog({
+  open,
+  onOpenChange,
+  initialContractId,
+  contracts,
+  propertyMap,
+  tenantMap,
+  owners,
+  positionsByContract,
+  onSave,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  initialContractId: string;
+  contracts: Contract[];
+  propertyMap: Map<string, Property>;
+  tenantMap: Map<string, Tenant>;
+  owners: Owner[];
+  positionsByContract: Map<
+    string,
+    { collected: number; disposal: ReturnType<typeof depositDisposalOf> }
+  >;
+  onSave: (form: DepositRecordState) => void;
+}) {
+  const [form, setForm] = useState<DepositRecordState>({
+    action: "tahsil",
+    contractId: "",
+    amount: "",
+    date: TODAY,
+    note: "",
+    collectedByProxyOwnerId: "",
+    category: "diger",
+    description: "",
+  });
+  const [error, setError] = useState<string | null>(null);
+
+  const [lastKey, setLastKey] = useState("");
+  const key = open ? `new-${initialContractId}` : "closed";
+  if (key !== lastKey) {
+    setLastKey(key);
+    setForm({
+      action: "tahsil",
+      contractId: initialContractId,
+      amount: "",
+      date: TODAY,
+      note: "",
+      collectedByProxyOwnerId: "",
+      category: "diger",
+      description: "",
+    });
+    setError(null);
+  }
+
+  const set = <K extends keyof DepositRecordState>(
+    key: K,
+    value: DepositRecordState[K],
+  ) => setForm((f) => ({ ...f, [key]: value }));
+
+  const selectedContract = contracts.find(
+    (c) => c._id.toString() === form.contractId,
+  );
+  const selectedPos = selectedContract
+    ? positionsByContract.get(selectedContract._id.toString())
+    : undefined;
+  const collected = selectedPos?.collected ?? 0;
+  const disposal = selectedPos?.disposal ?? {
+    returned: 0,
+    paidToOwner: 0,
+    writtenOff: 0,
+  };
+  const held = selectedContract
+    ? depositHeldOf(collected, disposal)
+    : 0;
+  const remaining = selectedContract
+    ? depositRemainingOf(selectedContract, collected)
+    : 0;
+
+  const proxyOwners = useMemo(
+    () => owners.filter((o) => o.proxy !== null),
+    [owners],
+  );
+
+  const limitLabel =
+    form.action === "tahsil"
+      ? `Tahsil edilebilir: ${formatCurrency(remaining)}`
+      : `Elde tutulan: ${formatCurrency(held)}`;
+
+  const submit = () => {
+    if (form.contractId === "" || form.date === "") {
+      setError("Kontrat ve kayıt tarihi zorunludur.");
+      return;
+    }
+    const amount = parseNumber(form.amount);
+    if (amount === undefined || amount <= 0) {
+      setError("Tutar geçerli bir değer olmalıdır.");
+      return;
+    }
+    if (form.action === "tahsil" && amount > remaining) {
+      setError(`Tahsil edilebilecek depozito ${formatCurrency(remaining)} ile sınırlıdır.`);
+      return;
+    }
+    if (form.action !== "tahsil" && amount > held) {
+      setError(`Elde tutulan depozito ${formatCurrency(held)} ile sınırlıdır.`);
+      return;
+    }
+    if (form.action === "mahsup" && form.description.trim() === "") {
+      setError("Mahsup için gider açıklaması zorunludur.");
+      return;
+    }
+    onSave(form);
+  };
+
+  return (
+    <DialogShell
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Depozito Kaydı"
+      description="Tahsil, iade, malike ödeme veya zarara/gidere mahsup kaydı işlenir; cari hesaplara otomatik yansır."
+      wide
+      footer={
+        <>
+          <Button
+            type="button"
+            variant="outline"
+            className="rounded-none"
+            onClick={() => onOpenChange(false)}
+          >
+            Vazgeç
+          </Button>
+          <Button type="button" className="rounded-none" onClick={submit}>
+            Kaydı İşle
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-5">
+        {error && (
+          <p className="text-sm text-destructive" role="alert">
+            {error}
+          </p>
+        )}
+
+        <Field label="İşlem Türü" required>
+          <Select
+            value={form.action}
+            onValueChange={(value) =>
+              set("action", value as DepositRecordState["action"])
+            }
+          >
+            <SelectTrigger className="rounded-none">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {ACTION_OPTIONS.map((a) => (
+                <SelectItem key={a.id} value={a.id}>
+                  {a.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+        <p className="-mt-2 text-xs leading-5 text-muted-foreground">
+          {ACTION_OPTIONS.find((a) => a.id === form.action)?.desc}
+        </p>
+
+        <Field label="Kontrat" required hint="gayrimenkul · kiracı">
+          <Select
+            value={form.contractId}
+            onValueChange={(value) => set("contractId", value)}
+          >
+            <SelectTrigger className="rounded-none">
+              <SelectValue placeholder="Kontrat seçin" />
+            </SelectTrigger>
+            <SelectContent>
+              {contracts.map((c) => {
+                const property = propertyMap.get(c.propertyId.toString());
+                const tenant = tenantMap.get(c.tenantId.toString());
+                return (
+                  <SelectItem key={c._id} value={c._id}>
+                    {property?.name ?? "Gayrimenkul"} · {tenant?.name ?? "Kiracı"}
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
+        </Field>
+
+        {selectedContract && (
+          <p className="-mt-2 text-xs leading-5 text-muted-foreground">
+            Depozito {formatCurrency(selectedContract.depositAmount)} · tahsil
+            edilen {formatCurrency(collected)} · {limitLabel}
+          </p>
+        )}
+
+        <Row>
+          <Field label="Tutar" required hint="₺">
+            <Input
+              value={form.amount}
+              onChange={(e) => set("amount", e.target.value)}
+              placeholder="15000"
+              className="rounded-none"
+            />
+          </Field>
+          <Field label="Tarih" required>
+            <Input
+              type="date"
+              value={form.date}
+              onChange={(e) => set("date", e.target.value)}
+              className="rounded-none"
+            />
+          </Field>
+        </Row>
+
+        {form.action === "tahsil" && (
+          <Field
+            label="Tahsilatı Yapan"
+            hint="vekil seçilirse cari hesabına borç işlenir"
+          >
+            <Select
+              value={
+                form.collectedByProxyOwnerId === ""
+                  ? "office"
+                  : form.collectedByProxyOwnerId
+              }
+              onValueChange={(value) =>
+                set(
+                  "collectedByProxyOwnerId",
+                  value === "office" ? "" : value,
+                )
+              }
+            >
+              <SelectTrigger className="rounded-none">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="office">Malik / Ofis</SelectItem>
+                {proxyOwners.map((o) => (
+                  <SelectItem key={o._id} value={o._id}>
+                    {o.proxy?.name} ({o.name} adına)
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+        )}
+
+        {form.action === "mahsup" && (
+          <Row>
+            <Field label="Masraf Kalemi">
+              <Select
+                value={form.category}
+                onValueChange={(value) => set("category", value)}
+              >
+                <SelectTrigger className="rounded-none">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="aidat">Aidat</SelectItem>
+                  <SelectItem value="yatirim">Yatırım</SelectItem>
+                  <SelectItem value="sigorta">Sigorta</SelectItem>
+                  <SelectItem value="tadilat">Tadilat-Bakım/Onarım</SelectItem>
+                  <SelectItem value="boya">Boya</SelectItem>
+                  <SelectItem value="diger">Diğer</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="Gider Açıklaması" required hint="örn. hasar tespiti">
+              <Input
+                value={form.description}
+                onChange={(e) => set("description", e.target.value)}
+                placeholder="örn. kombi arızası, cam kırığı…"
+                className="rounded-none"
+              />
+            </Field>
+          </Row>
+        )}
+
+        <Field label="Not" hint="isteğe bağlı">
+          <Input
+            value={form.note}
+            onChange={(e) => set("note", e.target.value)}
+            placeholder="İşleme dair açıklama"
+            className="rounded-none"
+          />
+        </Field>
       </div>
     </DialogShell>
   );

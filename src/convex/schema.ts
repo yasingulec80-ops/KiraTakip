@@ -49,6 +49,16 @@ export const fixtureValidator = v.object({
 });
 export type Fixture = Infer<typeof fixtureValidator>;
 
+// Diğer hissedar — gayrimenkul hisseli girişte ana malik dışındaki pay sahipleri.
+// Kayıtlı malik olmaları gerekmez; bilgiler doğrudan gayrimenkul formundan girilir.
+export const coOwnerValidator = v.object({
+  name: v.string(), // Adı Soyadı / ünvan
+  tcNo: v.optional(v.string()),
+  phone: v.optional(v.string()),
+  share: v.optional(v.number()), // hisse oranı (%)
+});
+export type CoOwner = Infer<typeof coOwnerValidator>;
+
 // KDV durumu — malik şirket olduğunda kira bedeli KDV dahil/hariç
 export const rentVatValidator = v.union(
   v.literal("dahil"),
@@ -110,9 +120,12 @@ export type LedgerPersonType = Infer<typeof ledgerPersonTypeValidator>;
 export const ledgerKindValidator = v.union(
   v.literal("accrual"),
   v.literal("collection"),
+  v.literal("payment"), // kişiye yapılan ödeme (malike ödeme, iade vb.)
   v.literal("expense"),
   v.literal("adjustment"),
-  v.literal("depositReturn"),
+  v.literal("depositReturn"), // depozito iadesi
+  v.literal("depositOwnerPayment"), // depozito — malike ödeme
+  v.literal("depositWriteOff"), // depozito — zarara/gidere mahsup
   v.literal("transfer"),
 );
 export type LedgerKind = Infer<typeof ledgerKindValidator>;
@@ -138,6 +151,8 @@ const schema = defineSchema(
     // Gayrimenkuller — properties managed in the portfolio
     properties: defineTable({
       ownerId: v.optional(v.id("owners")), // linked malik (owner)
+      ownerShare: v.optional(v.number()), // ana malikin hisse oranı (%)
+      coOwners: v.optional(v.array(coOwnerValidator)), // diğer hissedarlar
       name: v.string(), // Gayrimenkul Adı
       address: v.string(), // Adres
       m2: v.optional(v.number()), // M2

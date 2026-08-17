@@ -45,8 +45,17 @@ interface FixtureDraft {
   quantity: string;
 }
 
+interface CoOwnerDraft {
+  name: string;
+  tcNo: string;
+  phone: string;
+  share: string;
+}
+
 interface PropertyFormState {
   ownerId: string;
+  ownerShare: string;
+  coOwners: CoOwnerDraft[];
   name: string;
   address: string;
   m2: string;
@@ -61,6 +70,8 @@ interface PropertyFormState {
 
 const emptyForm: PropertyFormState = {
   ownerId: "",
+  ownerShare: "",
+  coOwners: [],
   name: "",
   address: "",
   m2: "",
@@ -75,6 +86,14 @@ const emptyForm: PropertyFormState = {
 
 const formFromProperty = (p: Property): PropertyFormState => ({
   ownerId: p.ownerId?.toString() ?? "",
+  ownerShare:
+    p.ownerShare !== undefined ? String(p.ownerShare) : "",
+  coOwners: (p.coOwners ?? []).map((c) => ({
+    name: c.name,
+    tcNo: c.tcNo ?? "",
+    phone: c.phone ?? "",
+    share: c.share !== undefined ? String(c.share) : "",
+  })),
   name: p.name,
   address: p.address,
   m2: p.m2 !== undefined ? String(p.m2) : "",
@@ -93,6 +112,8 @@ const formFromProperty = (p: Property): PropertyFormState => ({
 const CSV_HEADERS = [
   "Gayrimenkul Adı",
   "Malik",
+  "Malik Hisse (%)",
+  "Diğer Hissedarlar",
   "Adres",
   "M²",
   "Oda Sayısı",
@@ -137,6 +158,7 @@ export function PropertySection() {
       if (q === "") return true;
 
       const owner = p.ownerId ? ownerMap.get(p.ownerId.toString()) : undefined;
+      const coOwnerNames = (p.coOwners ?? []).map((c) => c.name);
       const haystack = [
         p.name,
         p.address,
@@ -147,6 +169,7 @@ export function PropertySection() {
         p.gasMeter,
         owner?.name,
         owner?.tcNo,
+        ...coOwnerNames,
       ]
         .filter(Boolean)
         .join(" ")
@@ -166,6 +189,13 @@ export function PropertySection() {
         return [
           p.name,
           owner?.name ?? "—",
+          p.ownerShare !== undefined ? formatNumber(p.ownerShare) : "",
+          (p.coOwners ?? [])
+            .map(
+              (c) =>
+                `${c.name}${c.share !== undefined ? ` (%${formatNumber(c.share)})` : ""}${c.tcNo ? ` · TC ${c.tcNo}` : ""}`,
+            )
+            .join(", "),
           p.address,
           p.m2 !== undefined ? formatNumber(p.m2) : "",
           p.roomCount ?? "",
@@ -191,6 +221,13 @@ export function PropertySection() {
         return [
           p.name,
           owner?.name ?? "—",
+          p.ownerShare !== undefined ? formatNumber(p.ownerShare) : "",
+          (p.coOwners ?? [])
+            .map(
+              (c) =>
+                `${c.name}${c.share !== undefined ? ` (%${formatNumber(c.share)})` : ""}${c.tcNo ? ` · TC ${c.tcNo}` : ""}`,
+            )
+            .join(", "),
           p.address,
           p.m2 !== undefined ? formatNumber(p.m2) : "",
           p.roomCount ?? "",
@@ -218,6 +255,15 @@ export function PropertySection() {
       ownerId: form.ownerId
         ? (form.ownerId as Id<"owners">)
         : undefined,
+      ownerShare: parseNumber(form.ownerShare),
+      coOwners: form.coOwners
+        .filter((c) => c.name.trim() !== "")
+        .map((c) => ({
+          name: c.name.trim(),
+          tcNo: c.tcNo.trim() || undefined,
+          phone: c.phone.trim() || undefined,
+          share: parseNumber(c.share),
+        })),
       name: form.name.trim(),
       address: form.address.trim(),
       m2: parseNumber(form.m2),
@@ -332,6 +378,10 @@ export function PropertySection() {
                         <div className="font-medium">{p.name}</div>
                         <div className="text-xs text-muted-foreground">
                           {owner ? `Malik: ${owner.name}` : "Malik atanmadı"}
+                          {p.ownerShare !== undefined &&
+                            ` · %${formatNumber(p.ownerShare)}`}
+                          {(p.coOwners ?? []).length > 0 &&
+                            ` · +${(p.coOwners ?? []).length} hissedar`}
                         </div>
                       </TableCell>
                       <TableCell className="max-w-52 truncate text-sm text-muted-foreground">
@@ -470,6 +520,14 @@ function PropertyFormDialog({
       ),
     }));
 
+  const setCoOwner = (index: number, patch: Partial<CoOwnerDraft>) =>
+    setForm((f) => ({
+      ...f,
+      coOwners: f.coOwners.map((co, i) =>
+        i === index ? { ...co, ...patch } : co,
+      ),
+    }));
+
   const submit = () => {
     if (form.name.trim() === "" || form.address.trim() === "") {
       setError("Gayrimenkul adı ve adres zorunludur.");
@@ -512,7 +570,7 @@ function PropertyFormDialog({
           </p>
         )}
 
-        <Row>
+        <Row cols={3}>
           <Field label="Malik" hint="isteğe bağlı">
             <Select
               value={form.ownerId}
@@ -530,6 +588,17 @@ function PropertyFormDialog({
               </SelectContent>
             </Select>
           </Field>
+          <Field label="Malik Hisse Oranı" hint="% · hisseli giriş">
+            <Input
+              type="number"
+              min={0}
+              max={100}
+              value={form.ownerShare}
+              onChange={(e) => set("ownerShare", e.target.value)}
+              placeholder="50"
+              className="rounded-none"
+            />
+          </Field>
           <Field label="Gayrimenkul Adı" required>
             <Input
               value={form.name}
@@ -539,6 +608,89 @@ function PropertyFormDialog({
             />
           </Field>
         </Row>
+
+        {/* Diğer Hissedarlar */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+              Diğer Hissedarlar
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="rounded-none"
+              onClick={() =>
+                set("coOwners", [
+                  ...form.coOwners,
+                  { name: "", tcNo: "", phone: "", share: "" },
+                ])
+              }
+            >
+              <Plus className="mr-1.5 h-3.5 w-3.5" />
+              Hissedar Ekle
+            </Button>
+          </div>
+          {form.coOwners.length === 0 ? (
+            <p className="border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground">
+              Gayrimenkul hisseli ise ana malik dışındaki pay sahiplerini
+              buraya ekleyebilirsiniz (isteğe bağlı).
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {form.coOwners.map((co, i) => (
+                <div
+                  key={i}
+                  className="grid grid-cols-12 items-center gap-2 border border-border p-2"
+                >
+                  <Input
+                    value={co.name}
+                    onChange={(e) => setCoOwner(i, { name: e.target.value })}
+                    placeholder="Adı Soyadı / Ünvan"
+                    className="col-span-12 rounded-none sm:col-span-4"
+                  />
+                  <Input
+                    value={co.tcNo}
+                    onChange={(e) => setCoOwner(i, { tcNo: e.target.value })}
+                    placeholder="TC Kimlik No"
+                    className="col-span-4 rounded-none sm:col-span-2"
+                  />
+                  <Input
+                    value={co.phone}
+                    onChange={(e) => setCoOwner(i, { phone: e.target.value })}
+                    placeholder="Telefon"
+                    className="col-span-4 rounded-none sm:col-span-2"
+                  />
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={co.share}
+                    onChange={(e) => setCoOwner(i, { share: e.target.value })}
+                    placeholder="Hisse %"
+                    className="col-span-3 rounded-none sm:col-span-2"
+                    aria-label="Hisse oranı"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="col-span-1 h-9 w-9 shrink-0 justify-self-end rounded-none text-muted-foreground hover:text-destructive"
+                    onClick={() =>
+                      set(
+                        "coOwners",
+                        form.coOwners.filter((_, idx) => idx !== i),
+                      )
+                    }
+                    aria-label="Hissedarı kaldır"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         <Field label="Adres" required>
           <Input
@@ -724,6 +876,37 @@ function PropertyDetailDialog({
               ) : (
                 "Atanmadı"
               )
+            }
+          />
+          <DetailRow
+            label="Malik Hisse Oranı"
+            value={
+              property.ownerShare !== undefined
+                ? `%${formatNumber(property.ownerShare)}`
+                : undefined
+            }
+          />
+          <DetailRow
+            label="Diğer Hissedarlar"
+            value={
+              (property.coOwners ?? []).length > 0 ? (
+                <ul className="space-y-1">
+                  {(property.coOwners ?? []).map((c, i) => (
+                    <li key={i} className="flex items-baseline justify-between gap-4">
+                      <span>
+                        {c.name}
+                        {c.tcNo ? ` · TC ${c.tcNo}` : ""}
+                      </span>
+                      <span className="tabular-nums text-muted-foreground">
+                        {c.share !== undefined
+                          ? `%${formatNumber(c.share)}`
+                          : "—"}
+                        {c.phone ? ` · ${c.phone}` : ""}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : undefined
             }
           />
           <DetailRow label="Adres" value={property.address} />
