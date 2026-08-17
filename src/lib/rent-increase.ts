@@ -5,6 +5,7 @@
  * karosu/detay görünümü bu kuralları kullanır; tek kaynak olduğu için birim
  * test edilir.
  */
+import { periodKey } from "./ledger-posts";
 
 /** Artış dönemi — Türkiye'de konut kiralamalarında yıllık artış esası. */
 export const INCREASE_INTERVAL_MONTHS = 12;
@@ -88,6 +89,34 @@ export const increasedRent = (
   currentRent: number,
   ratePercent: number,
 ): number => Math.round(currentRent * (1 + ratePercent / 100));
+
+/** Artışın etkilediği tahakkukların saf seçimi (mutation'ın döngüsü). */
+export interface RentAccrualLike {
+  type?: string | null;
+  period: string;
+  amount: number;
+  dueDate: number;
+}
+
+/**
+ * Kira artışından etkilenen tahakkuklar: depozito hariç, etkili tarihin
+ * döneminden (dahil) itibaren ve tutarı yeni kira ile aynı olmayanlar.
+ * Mutation bu listeyi günceller; vadesi gelmiş olanların cari kayıtlarını da
+ * yeniden işler (dueDate <= now).
+ */
+export const rentAccrualsToUpdate = <T extends RentAccrualLike>(
+  accruals: T[],
+  effectiveDate: number,
+  newAmount: number,
+): T[] => {
+  const startPeriod = periodKey(effectiveDate);
+  return accruals.filter(
+    (a) =>
+      (a.type ?? "rent") !== "deposit" &&
+      a.period >= startPeriod &&
+      a.amount !== newAmount,
+  );
+};
 
 /**
  * Karo için etkin "sonraki artış tarihi":

@@ -7,6 +7,7 @@ import {
   increasedRent,
   isIncreaseDue,
   nextIncreaseDateOf,
+  rentAccrualsToUpdate,
 } from "../src/lib/rent-increase";
 
 const at = (year: number, month: number, day: number) =>
@@ -146,5 +147,73 @@ describe("effectiveNextIncreaseDate — karo için etkin tarih", () => {
 describe("contractEndMs — kontrat bitişi", () => {
   test("12 aylık kontrat bir sonraki yılın haziran sonu biter", () => {
     expect(contractEndMs(at(2026, 7, 1), 12)).toBe(at(2027, 6, 30));
+  });
+});
+
+describe("rentAccrualsToUpdate — artışın etkilediği tahakkuklar", () => {
+  const rent = (period: string, amount: number, dueDate: number, type?: string) => ({
+    _id: `a-${period}`,
+    type,
+    period,
+    amount,
+    dueDate,
+  });
+  const start = at(2026, 7, 1);
+
+  test("etkili tarihin döneminden (dahil) itibaren farklı tutarlı kiralar seçilir", () => {
+    const accruals = [
+      rent("2026-05", 10000, start),
+      rent("2026-06", 10000, start),
+      rent("2026-07", 10000, start),
+      rent("2026-08", 10000, start),
+    ];
+    const updated = rentAccrualsToUpdate(accruals, at(2026, 7, 15), 12000);
+    expect(updated.map((a) => a.period)).toEqual(["2026-07", "2026-08"]);
+  });
+
+  test("depozito tahakkukları asla seçilmez (type = deposit)", () => {
+    const accruals = [
+      rent("2026-07", 30000, start, "deposit"),
+      rent("2026-07", 10000, start),
+    ];
+    const updated = rentAccrualsToUpdate(accruals, at(2026, 7, 1), 12000);
+    expect(updated.map((a) => a.period)).toEqual(["2026-07"]);
+    expect(updated[0]?.amount).toBe(10000);
+  });
+
+  test("tutar zaten yeni kira ile aynıysa dokunulmaz", () => {
+    const accruals = [rent("2026-07", 12000, start), rent("2026-08", 12000, start)];
+    expect(
+      rentAccrualsToUpdate(accruals, at(2026, 7, 1), 12000),
+    ).toEqual([]);
+  });
+
+  test("type alanı olmayan eski kayıtlar kira sayılır (depozito değil)", () => {
+    const accruals = [
+      { _id: "legacy", period: "2026-07", amount: 10000, dueDate: start },
+    ];
+    expect(
+      rentAccrualsToUpdate(accruals, at(2026, 7, 1), 12000).map((a) => a._id),
+    ).toEqual(["legacy"]);
+  });
+
+  test("karışık senaryo: geçmiş + depozito + aynı tutar dışlanır, gerisi güncellenir", () => {
+    const accruals = [
+      rent("2026-05", 10000, start), // geçmiş dönem → dışarı
+      rent("2026-06", 10000, start), // geçmiş dönem → dışarı
+      rent("2026-06", 30000, start, "deposit"), // depozito → dışarı
+      rent("2026-07", 10000, start), // güncelle
+      rent("2026-08", 10000, start), // güncelle
+      rent("2026-09", 12000, start), // aynı tutar → dışarı
+    ];
+    const updated = rentAccrualsToUpdate(accruals, at(2026, 7, 1), 12000);
+    expect(updated.map((a) => a.period)).toEqual(["2026-07", "2026-08"]);
+  });
+
+  test("dönem karşılaştırması YYYY-MM sıralıdır; aynı ay dahil edilir", () => {
+    const accruals = [rent("2026-12", 10000, start), rent("2027-01", 10000, start)];
+    expect(
+      rentAccrualsToUpdate(accruals, at(2026, 12, 10), 12000).map((a) => a.period),
+    ).toEqual(["2026-12", "2027-01"]);
   });
 });

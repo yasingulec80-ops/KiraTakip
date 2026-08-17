@@ -48,3 +48,21 @@ export const increaseNotificationRecipients = (
   }
   return recipients;
 };
+
+/**
+ * Scheduler payload e-postaları — yalnızca tercih filtresinden geçmiş
+ * alıcıların e-postalarını döndürür. Mutation bu payload'ı
+ * `sendRentIncreaseNotification` action'ına aktarır; action kendi alıcı
+ * listesini bu e-postalardan kurduğu için tercih kuralı iki katman arasında
+ * kaybolmaz (tek kaynak: increaseNotificationRecipients).
+ */
+export const increaseNotifyEmails = (
+  recipients: IncreaseNotifyRecipient[],
+): { tenantEmail?: string; ownerEmail?: string } => {
+  const out: { tenantEmail?: string; ownerEmail?: string } = {};
+  for (const r of recipients) {
+    if (r.role === "owner") out.ownerEmail = r.email;
+    else out.tenantEmail = r.email;
+  }
+  return out;
+};

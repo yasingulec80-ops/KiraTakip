@@ -19,8 +19,11 @@ import {
   requirePropertyAccess,
 } from "./ledger_helpers";
 import { depositAccrualDecision } from "../lib/ledger-posts";
-import { nextIncreaseDateOf } from "../lib/rent-increase";
-import { increaseNotificationRecipients } from "../lib/increase-notify";
+import { nextIncreaseDateOf, rentAccrualsToUpdate } from "../lib/rent-increase";
+import {
+  increaseNotificationRecipients,
+  increaseNotifyEmails,
+} from "../lib/increase-notify";
 import {
   contractMonths,
   createAccrualWithLedger,
@@ -265,16 +268,16 @@ export const applyRentIncrease = mutation({
 
     // Gelecek kira tahakkuklarını yeni tutara güncelle. Depozito tahakkuku
     // (type = deposit) kira döngüsüne dahil değildir — dokunulmaz.
-    const startPeriod = periodKey(args.effectiveDate);
     const accruals = await ctx.db
       .query("accruals")
       .withIndex("by_contract", (q) => q.eq("contractId", contract._id))
       .collect();
     let updatedAccruals = 0;
-    for (const accrual of accruals) {
-      if ((accrual.type ?? "rent") === "deposit") continue;
-      if (accrual.period < startPeriod) continue;
-      if (accrual.amount === args.newRentAmount) continue;
+    for (const accrual of rentAccrualsToUpdate(
+      accruals,
+      args.effectiveDate,
+      args.newRentAmount,
+    )) {
       await ctx.db.patch(accrual._id, { amount: args.newRentAmount });
       updatedAccruals++;
       // Vadesi gelmiş tahakkukların cari kayıtlarını yeni tutarla yeniden işle
@@ -306,15 +309,18 @@ export const applyRentIncrease = mutation({
     });
     const notifiedRoles = recipients.map((r) => r.role);
     if (recipients.length > 0) {
+      // Yalnızca tercih filtresinden geçen alıcıların e-postaları action'a
+      // aktarılır — action kendi alıcı listesini bu e-postalardan kurar.
+      const emails = increaseNotifyEmails(recipients);
       await ctx.scheduler.runAfter(
         0,
         internal.reminders.sendRentIncreaseNotification,
         {
           propertyName: property?.name ?? "Gayrimenkul",
           tenantName: tenant?.name ?? "Kiracı",
-          tenantEmail: tenant?.email,
+          tenantEmail: emails.tenantEmail,
           ownerName: owner?.name ?? "Malik",
-          ownerEmail: owner?.email,
+          ownerEmail: emails.ownerEmail,
           oldRent: contract.rentAmount,
           newRent: args.newRentAmount,
           rate: args.rate,

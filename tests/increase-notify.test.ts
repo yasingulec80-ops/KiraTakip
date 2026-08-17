@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { increaseNotificationRecipients } from "../src/lib/increase-notify";
+import {
+  increaseNotificationRecipients,
+  increaseNotifyEmails,
+} from "../src/lib/increase-notify";
 
 describe("increaseNotificationRecipients — artış bildirimi alıcıları", () => {
   test("malik ve kiracının e-postası varsa ikisi de alınır (sırayla: malik, kiracı)", () => {
@@ -105,5 +108,55 @@ describe("increaseNotificationRecipients — hatırlatma ayarları tercihleri", 
     ).toEqual([
       { email: "elif@ornek.com", name: "Elif Demir", role: "tenant" },
     ]);
+  });
+});
+
+describe("increaseNotifyEmails — scheduler payload e-postaları (mutation → action)", () => {
+  const owner = { name: "Ahmet Yılmaz", email: "ahmet@ornek.com" };
+  const tenant = { name: "Elif Demir", email: "elif@ornek.com" };
+
+  /** Mutation'ın birebir akışı: filtre → payload. */
+  const payloadFor = (prefs?: {
+    notifyTenant?: boolean;
+    notifyOwner?: boolean;
+  }) => {
+    const recipients = increaseNotificationRecipients(owner, tenant, prefs);
+    return increaseNotifyEmails(recipients);
+  };
+
+  test("her iki tercih açıkken payload her iki e-postayı taşır", () => {
+    expect(payloadFor()).toEqual({
+      ownerEmail: "ahmet@ornek.com",
+      tenantEmail: "elif@ornek.com",
+    });
+  });
+
+  test("notifyTenant: false → kiracı e-postası action'a hiç aktarılmaz", () => {
+    expect(payloadFor({ notifyTenant: false })).toEqual({
+      ownerEmail: "ahmet@ornek.com",
+    });
+  });
+
+  test("notifyOwner: false → malik e-postası action'a hiç aktarılmaz", () => {
+    expect(payloadFor({ notifyOwner: false })).toEqual({
+      tenantEmail: "elif@ornek.com",
+    });
+  });
+
+  test("ikisi de kapalı → boş payload (mutation job'ı planlamaz)", () => {
+    expect(
+      payloadFor({ notifyTenant: false, notifyOwner: false }),
+    ).toEqual({});
+  });
+
+  test("e-postası olmayan alıcı payload'da yer alamaz", () => {
+    const recipients = increaseNotificationRecipients(
+      { name: "Ahmet", email: null },
+      tenant,
+      { notifyTenant: true, notifyOwner: true },
+    );
+    expect(increaseNotifyEmails(recipients)).toEqual({
+      tenantEmail: "elif@ornek.com",
+    });
   });
 });
