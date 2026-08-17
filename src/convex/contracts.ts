@@ -20,6 +20,7 @@ import {
 } from "./ledger_helpers";
 import { depositAccrualDecision } from "../lib/ledger-posts";
 import { nextIncreaseDateOf, rentAccrualsToUpdate } from "../lib/rent-increase";
+import { devirablesFor } from "../lib/vekil-math";
 import {
   increaseNotificationRecipients,
   increaseNotifyEmails,
@@ -425,25 +426,25 @@ export const returnDeposit = mutation({
           )
           .reduce((sum, c) => sum + c.amount, 0);
 
-        // Vekilin tahsil edip henüz devretmediği toplam tutar (devir akışıyla aynı hesap).
+        // Vekilin tahsil edip henüz teslim etmediği depozito tutarı — devir
+        // akışıyla aynı hesap (devirablesFor.deposit; alacak depozito tarafını
+        // etkilemez, daha önce yapılan depozito devirleri düşülür).
         const vekilEntries = await ctx.db
           .query("ledgerEntries")
           .withIndex("by_person", (q) =>
             q.eq("personType", "proxy").eq("personId", proxyOwnerId),
           )
           .collect();
-        const outstanding = vekilEntries.reduce((sum, e) => {
-          if (
-            e.kind === "collection" &&
-            e.description.startsWith("Vekil tahsilatı")
-          ) {
-            return sum + Math.abs(e.amount);
-          }
-          if (e.kind === "transfer") return sum - e.amount;
-          return sum;
-        }, 0);
+        const depositDevirable = devirablesFor(
+          vekilEntries,
+          proxyOwnerId.toString(),
+        ).deposit;
 
-        const clearAmount = Math.min(vekilPortion, outstanding, totalCollected);
+        const clearAmount = Math.min(
+          vekilPortion,
+          depositDevirable,
+          totalCollected,
+        );
         if (clearAmount > 0) {
           await postLedgerEntry(ctx, actor, {
             propertyId: contract.propertyId,
