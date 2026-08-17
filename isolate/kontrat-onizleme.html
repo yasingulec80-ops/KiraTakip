@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8" />
+<title>Kira Kontratı</title>
+<style>
+  @page { size: A4 portrait; margin: 16mm 14mm; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Georgia", "Times New Roman", serif;
+    color: #2b2722;
+    font-size: 12.5px;
+    line-height: 1.75;
+    background: #ece8df;
+  }
+  @media print { body { background: #fff; } }
+  .page {
+    display: flex;
+    flex-direction: column;
+    min-height: 265mm;
+    width: 210mm;
+    margin: 0 auto;
+    padding: 14mm 12mm;
+    background: #fff;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.14);
+    page-break-after: always;
+    break-after: page;
+  }
+  .page:last-child { page-break-after: auto; break-after: auto; }
+  @media print {
+    .page {
+      width: auto;
+      margin: 0;
+      padding: 0;
+      box-shadow: none;
+    }
+  }
+  .content { flex: 1 1 auto; }
+  .doc-head {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 24px;
+    border-bottom: 1.5px solid #2b2722;
+    padding-bottom: 10px; margin-bottom: 20px;
+  }
+  .doc-head.running { border-bottom-color: #d8d1c4; margin-bottom: 16px; }
+  h1 { font-size: 19px; font-weight: 600; margin: 0; letter-spacing: 0.02em; }
+  .meta {
+    font-size: 9.5px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: #6b6358; text-align: right;
+  }
+  h2 { font-size: 12px; font-weight: 600; margin: 20px 0 8px; letter-spacing: 0.05em; }
+  .cont { font-weight: 400; text-transform: none; letter-spacing: 0; color: #6b6358; font-size: 11px; }
+  .clause { margin: 0 0 8px; text-align: justify; }
+  .closing { margin-top: 22px; }
+  .conditions { font-size: 11.8px; }
+  .conditions p { margin: 0 0 5px; text-align: justify; }
+  .signature .name .sub {
+    display: block; margin-top: 2px; font-size: 10px; font-weight: 400;
+    letter-spacing: 0.02em; text-transform: none; color: #6b6358;
+  }
+  .taahhut-box {
+    border: 1px solid #d8d1c4;
+    padding: 14px 16px;
+    margin-top: 18px;
+  }
+  .taahhut-box .field-row:last-child { border-bottom: none; }
+  .field-row {
+    display: flex; justify-content: space-between; gap: 24px;
+    border-bottom: 1px solid #e3ddd2; padding: 5px 0;
+  }
+  .field-label { color: #6b6358; font-size: 10.5px; letter-spacing: 0.05em; }
+  .field-row > span:last-child { text-align: right; }
+  .sig-date { margin-top: 20px; font-size: 12px; }
+  .signatures {
+    display: flex; justify-content: space-between; gap: 36px;
+    margin-top: 30px;
+  }
+  .signature { flex: 1; }
+  .signature .line { border-bottom: 1px solid #2b2722; height: 42px; }
+  .signature .name {
+    margin-top: 8px; font-size: 10px; letter-spacing: 0.08em;
+    text-transform: uppercase; color: #6b6358;
+  }
+  .signature .name span {
+    display: block; margin-top: 2px; font-size: 12px; font-weight: 600;
+    letter-spacing: 0; text-transform: none; color: #2b2722;
+  }
+  .page-foot {
+    margin-top: 14px; padding-top: 8px; border-top: 1px solid #e3ddd2;
+    font-size: 9.5px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: #6b6358; text-align: center;
+  }
+</style>
+</head>
+<body>
+
+    <div class="page">
+      <div class="content">
+        <div class="doc-head">
+          <h1>KİRA KONTRATI</h1>
+          <div class="meta">Kira Takip · Gayrimenkul Yönetim Paneli</div>
+        </div>
+        <p class="clause">İşbu kira kontratı, aşağıda kimlik bilgileri yer alan taraflar arasında, aşağıda yazılı koşullarla düzenlenmiştir.</p>
+
+        <h2>MADDE 1 — TARAFLAR</h2>
+        <div>
+          <div class="field-row"><span class="field-label">Kiracı</span><span>Elif Demir</span></div>
+          <div class="field-row"><span class="field-label">TC Kimlik No</span><span>23456789012</span></div>
+          <div class="field-row"><span class="field-label">Telefon</span><span>0535 777 88 99</span></div>
+          <div class="field-row"><span class="field-label">Adres</span><span>Kadıköy / İstanbul</span></div>
+          <div class="field-row"><span class="field-label">E-posta</span><span>elif@example.com</span></div>
+          <div class="field-row"><span class="field-label">Kiraya Veren</span><span>Yılmaz Gayrimenkul A.Ş.</span></div>
+          <div class="field-row"><span class="field-label">Vergi No</span><span>9876543210</span></div><div class="field-row"><span class="field-label">Vergi Dairesi</span><span>Kadıköy VD</span></div><div class="field-row"><span class="field-label">İmza Yetkilisi</span><span>Ahmet Yılmaz</span></div>
+          <div class="field-row"><span class="field-label">Telefon</span><span>0532 111 22 33</span></div>
+          
+          
+        </div>
+
+        <h2>MADDE 2 — KONU</h2>
+        <div>
+          <div class="field-row"><span class="field-label">Gayrimenkul</span><span>Bağdat Cad. No:12 D:4</span></div>
+          <div class="field-row"><span class="field-label">Adres</span><span>Caddebostan, Kadıköy / İstanbul</span></div>
+          <div class="field-row"><span class="field-label">Brüt Alan</span><span>120 m²</span></div>
+          <div class="field-row"><span class="field-label">Oda Sayısı</span><span>3+1</span></div>
+        </div>
+
+        <h2>MADDE 3 — SÜRE</h2>
+        <div>
+          <div class="field-row"><span class="field-label">Başlangıç Tarihi</span><span>01 Ağu 2026</span></div>
+          <div class="field-row"><span class="field-label">Kira Süresi</span><span>12 ay</span></div>
+          <div class="field-row"><span class="field-label">Bitiş Tarihi</span><span>31 Tem 2027</span></div>
+        </div>
+
+        <h2>MADDE 4 — KİRA BEDELİ</h2>
+        <p class="clause">Kiracı, kira bedelini her ayın başında ödemekle yükümlüdür. Aylık kira bedeli 18.500 ₺ (KDV hariç) olarak belirlenmiştir. Yıllık kira bedeli 222.000 ₺ (KDV hariç) olarak hesaplanmıştır.</p>
+
+        <h2>MADDE 5 — DEPOZİTO</h2>
+        <p class="clause">Depozito tutarı 55.500 ₺ olarak belirlenmiştir. Depozito, 3 aylık kira bedeli karşılığıdır (aylık kira 18.500 ₺ × 3 ay = 55.500 ₺). Depozito, kontrat sona erdiğinde ve gayrimenkulün boşaltılmış olduğu tespit edildiğinde iade edilir.</p>
+      </div>
+      <div class="signatures">
+      <div class="signature"><div class="line"></div><div class="name">Kiracı<span>Elif Demir</span></div></div>
+      
+      <div class="signature"><div class="line"></div><div class="name">Kiraya Veren<span>Yılmaz Gayrimenkul A.Ş.</span></div></div>
+    </div>
+    <div class="page-foot">Sayfa 1 / 3</div>
+    </div>
+
+    <div class="page">
+      <div class="content">
+        <div class="doc-head running"><span class="meta">Kira Kontratı</span><span class="meta">Kira Takip · Gayrimenkul Yönetim Paneli</span></div>
+
+        <h2>MADDE 6 — DEMİRBAŞLAR</h2>
+        <p class="clause">—</p>
+
+        <h2>GENEL KOŞULLAR</h2>
+        <div class="conditions">
+          <p><strong>Madde 1.</strong> Kiracı, kiralananı özenle kullanmak zorundadır.</p>
+          <p><strong>Madde 2.</strong> Kiracı, kiralananda ve çevrede oturanlara iyi niyet kuralları içinde davranmaya zorunludur.</p>
+          <p><strong>Madde 3.</strong> Kiracı, kiralananı kısmen veya tamamen üçüncü kişilere kiralayamaz, alt kiraya veremez; devir ve temlik edemez.</p>
+          <p><strong>Madde 4.</strong> Kiracı, kiralayanın yazılı izni olmadıkça, kiralananda değişiklik yapamaz; aksi halde, doğacak zararı karşılamak zorundadır.</p>
+          <p><strong>Madde 5.</strong> Üçüncü kişilerin kiralanan üzerinde hak iddia etmeleri halinde, kiracı, durumu derhal kiralayana haber vermek zorundadır.</p>
+          <p><strong>Madde 6.</strong> Kiracı, kiralananda yapılması gereken onarımları, derhal kiralayana bildirmek zorundadır; aksi halde doğacak zarardan sorumludur.</p>
+          <p><strong>Madde 7.</strong> Kiracı, kat malikleri kurulunca kendisine tebliğ edilen hususları, kiralayana haber vermek zorundadır.</p>
+          <p><strong>Madde 8.</strong> Kiracı, kat malikleri kurulu kararı uyarınca, yapılması gereken işlere izin vermek zorundadır.</p>
+          <p><strong>Madde 9.</strong> Kiracı, kiralanandaki onarımlara katlanmak ve kiralanandaki olağan kullanımdan dolayı yapılması gereken onarımları yapmak/yaptırmak ve giderlerini karşılamak zorundadır.</p>
+          <p><strong>Madde 10.</strong> Kiralananın mülkiyet hakkından doğan vergileri kiralayana, kullanımdan doğan vergi, resim ve harçları kiracıya aittir. Uyuşmazlık halinde, yerel örf ve âdetler uygulanır.</p>
+          <p><strong>Madde 11.</strong> Kiracı, kira sözleşmesinin sonunda, kiralananı aldığı şekilde, kiralayana teslim etmek zorundadır: Keza kiralananla birlikte teslim edilen demirbaşlar da alındığı şekilde, kiralanana teslim edilmediği takdirde, oluşan hasarların bedelinin kiralayana ödenmesi veya eski hale getirilmesi zorunludur.</p>
+          <p><strong>Madde 12.</strong> Kiralananın iyi ve kullanılmaya elverişli halde teslim edildiği asıldır. Aksi durum kiracı tarafından ispatlanmak zorundadır. Kiralananın normal kullanımından dolayı ortaya çıkacak yıpranma ve eksikliklerden dolayı kiracı sorumlu değildir.</p>
+          <p><strong>Madde 13.</strong> Kiracı, kira sözleşmesinin sona ermesi veya satılığa çıkartılması halinde, kiralananın gezilmesine ve incelenmesine izin vermek zorundadır.</p>
+          <p><strong>Madde 14.</strong> Kiralananın boşaltılması/tahliyesi gerektiği hallerde, kiralananın boşaltılmaması durumunda ortaya çıkacak zararlardan dolayı kiracı sorumlu olacaktır.</p>
+          <p><strong>Madde 15.</strong> Kiracı, kendisi veya birlikte oturanların sağlığı için ciddi tehlike oluşturmayan kusurlardan dolayı, kiralayanı teslim almaktan kaçınamaz, sözleşmeyi bozamaz ve kiradan indirim talebinde bulunamaz.</p>
+          <p><strong>Madde 16.</strong> Kiracı, kiralana yaptığı faydalı ve lüks şeylerin bedelini kiralayandan isteyemez ve sözleşme bitiminde bunları kiralayana teslim etmek zorundadır.</p>
+          <p><strong>Madde 17.</strong> Kiracı, kiralayanın yazılı olurunu almak ve giderleri kendisine ait olmak üzere, genel anten, uydu anteni, kablo televizyon gibi donanımları yaptırabilir.</p>
+          <p><strong>Madde 18.</strong> İş bu kira sözleşmesinde yer almayan hususlar hakkında 6098 sayılı borçlar kanunu hükümleri geçerlidir.</p>
+        </div>
+      </div>
+      <div class="signatures">
+      <div class="signature"><div class="line"></div><div class="name">Kiracı<span>Elif Demir</span></div></div>
+      
+      <div class="signature"><div class="line"></div><div class="name">Kiraya Veren<span>Yılmaz Gayrimenkul A.Ş.</span></div></div>
+    </div>
+    <div class="page-foot">Sayfa 2 / 3</div>
+    </div>
+
+    <div class="page">
+      <div class="content">
+        <div class="doc-head running"><span class="meta">Kira Kontratı</span><span class="meta">Kira Takip · Gayrimenkul Yönetim Paneli</span></div>
+
+        
+
+        <p class="clause closing">İşbu kira kontratı, taraflarca okunarak anlaşılmış ve aşağıda imza altına alınmıştır. Taraflardan her biri, sözleşme metninin birer örneğini teslim almıştır.</p>
+        <div class="sig-date">Tarih: 08 Ağu 2026</div>
+      </div>
+      <div class="signatures">
+      <div class="signature"><div class="line"></div><div class="name">Kiracı<span>Elif Demir</span></div></div>
+      
+      <div class="signature"><div class="line"></div><div class="name">Kiraya Veren<span>Yılmaz Gayrimenkul A.Ş.</span></div></div>
+    </div>
+    <div class="page-foot">Sayfa 3 / 3</div>
+    </div>
+
+</body>
+</html>
