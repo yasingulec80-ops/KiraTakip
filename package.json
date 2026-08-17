@@ -9,6 +9,9 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "preview": "vite preview",
+    "dev:all": "convex dev --start 'vite'",
+    "dev:convex": "convex dev",
+    "dev:web": "vite",
     "backfill:smoke": "bun run scripts/backfill-smoke.ts",
     "test": "bun test tests/"
   },

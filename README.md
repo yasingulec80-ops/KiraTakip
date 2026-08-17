@@ -17,6 +17,60 @@ All relevant files live in the 'src' directory.
 
 Use bun for the package manager.
 
+## Yerel Bilgisayarda Çalıştırma (Local Development)
+
+Ön koşul: [Bun](https://bun.sh) v1.x kurulu olmalı.
+
+```bash
+# 1. Bağımlılıkları kur
+bun install
+
+# 2. Backend + frontend'i tek terminalde başlat — Convex yerel (local) modda
+#    çalışır, oturum açmayı gerektirmez; --start Vite'i de birlikte açar
+bunx convex dev --start 'vite'
+
+# Alternatif: iki ayrı terminal
+#   Terminal 1 → bunx convex dev
+#   Terminal 2 → bun run dev
+```
+
+Tarayıcıda `http://localhost:5173` adresini açın.
+
+### Ortam değişkenleri
+
+Yerel modda Convex CLI, frontend'in ihtiyaç duyduğu `VITE_CONVEX_URL` değerini
+`.env.local` içine otomatik yazar (örn. `http://127.0.0.1:3210`). Gerekirse
+elle de tanımlayabilirsiniz — `.env.local` zaten `.gitignore`'da:
+
+```
+# Frontend — Convex backend URL'si (yerel modda CLI otomatik doldurur)
+VITE_CONVEX_URL=http://127.0.0.1:3210
+
+# Backend — Convex Auth site URL'si (auth.config.ts okur; yerel modda genelde CLI doldurur)
+CONVEX_SITE_URL=http://127.0.0.1:3210
+
+# E-posta (isteğe bağlı) — kira hatırlatması ve artış bildirimleri için.
+# Boş bırakılırsa e-postalar sessizce atlanır; uygulama normal çalışır.
+VLY_INTEGRATION_KEY=
+```
+
+### İlk giriş ve demo verisi
+
+- Giriş ekranı ilk çalıştırmada yönetici hesabını otomatik oluşturur:
+  **kullanıcı adı `Admin`, şifre `8842`** (güvenlik gereği ekranda gösterilmez).
+- İsteğe bağlı demo verisi (yalnızca boş veritabanında çalışır):
+
+```bash
+bunx convex run seed:seedDemoData
+```
+
+### Doğrulama
+
+```bash
+bun test                                    # birim testler (tests/)
+bunx convex dev --once && bunx tsc -b --noEmit   # codegen + tip kontrolü
+```
+
 ## Setup
 
 This project is set up already and running on a cloud environment, as well as a convex development in the sandbox.
