@@ -2031,6 +2031,32 @@ const CONTRACT_STYLES = `
  * The document is split into A4 pages; every page ends with signature areas
  * (Kiracı / Malik / Vekil) whose names are filled in automatically.
  */
+
+/** Sayıyı Türkçe yazıya çevirir (basit, yalnızca pozitif tam sayılar için). */
+function toWordsTR(n: number): string {
+  if (n === 0) return "Sıfır";
+  const ones = ["", "Bir", "İki", "Üç", "Dört", "Beş", "Altı", "Yedi", "Sekiz", "Dokuz"];
+  const tens = ["", "On", "Yirmi", "Otuz", "Kırk", "Elli", "Altmış", "Yetmiş", "Seksen", "Doksan"];
+  const groups = ["", "Bin", "Milyon", "Milyar"];
+  if (n < 0) return "Eksi " + toWordsTR(-n);
+  if (n < 10) return ones[n];
+  if (n < 100) return tens[Math.floor(n / 10)] + (n % 10 ? " " + ones[n % 10] : "");
+  if (n < 1000) return ones[Math.floor(n / 100)] + " Yüz" + (n % 100 ? " " + toWordsTR(n % 100) : "");
+  let result = "";
+  let groupIdx = 0;
+  while (n > 0) {
+    const chunk = n % 1000;
+    if (chunk > 0) {
+      const chunkStr = toWordsTR(chunk);
+      const prefix = groupIdx === 1 && chunk === 1 ? "" : chunkStr + " ";
+      result = prefix + groups[groupIdx] + (result ? " " + result : "");
+    }
+    n = Math.floor(n / 1000);
+    groupIdx++;
+  }
+  return result.trim();
+}
+
 function buildContractHtml(
   contract: ContractDocData,
   owner?: Owner,
@@ -2059,6 +2085,17 @@ function buildContractHtml(
   const kefil = contract.guarantor ?? tenant?.guarantor ?? null;
   const hasEviction = contract.evictionCommitment === true;
   const TOTAL_PAGES = hasEviction ? 4 : 3;
+
+  /** Hususi şartlar — dinamik maddeler (malik/vekil banka bilgisi, kira bedeli vb.) */
+  const paymentPerson = owner?.proxy ? owner.proxy.name : owner?.name;
+  const hususiClauses = [
+    "Kiracı, bakım, satış ya da sonraki kiralama için zorunlu olduğu ölçüde, kiraya verenin ve onun belirlediği üçüncü kişinin kiralananı gezip görmesine izin vermekle yükümlüdür.",
+    "Aylık kira bedeli " + esc(tl(contract.rentAmount)) + " (" + esc(toWordsTR(Math.round(contract.rentAmount))) + " Türk Lirası’dır).",
+    "Kira, her ayın 1 ile 5’i arası aşağıdaki belirtilmiş olan banka hesabına kesintisiz havale edilecektir. " + esc(paymentPerson ?? owner?.name ?? "—") + " adına " + esc(owner?.iban ?? "—") + " IBAN nolu " + esc(owner?.bankName ?? "—") + " hesabını kullanacaktır.",
+    "Kefillerin kefaleti müteselsil ve müşterek borçlu sıfatıyla olup, kontratın devamı ve yenilenmesi sürecesince akdin karşıklı feshine kadar geçerlidir. Bu süreçte kefil azlini isteyemez.  Kefil, kira bedeli, bina genel gideri ve her türlü yan gider, elektrik, su, doğalgaz vb kullanım bedelleri gibi kiracının ödemek zorunda bulunduğu her türlü bedelden ve borçtan kiracılık sürecesince müteselsil borçlu sıfatıyla sorumlu olduğu gibi kiracının binaya ve çevreye verdiği her türlü zarardan da yine müteselsil borçlu sıfatıyla her türlü masraf ve vekâlet ücretleri de dâhil olmak üzere sorumludur.",
+    "İş bu kontrattan doğabilecek ihtilaflar halinde İstanbul Anadolu Adliyesi Mahkemeleri ve İcra Daireleri yetkilidir.",
+    "Bu sözleşmede yazılı bulunmayan hükümlere ihtiyaç duyulduğunda 6570 sayılı Kira Kanunu, Medeni Kanunu, Borçlar Kanunu, 634 sayılı Kat Mülkiyeti Kanununun ve Diğer yürürlükteki alakalı kanun ve Yargıtay kararları uygulanır.",
+  ];
 
   /** Her sayfanın altına imza alanları — isimler otomatik doldurulur. */
   const signatures = (page: number) => {
@@ -2183,6 +2220,13 @@ function buildContractHtml(
             (c, i) => `<p><strong>Madde ${i + 1}.</strong> ${esc(c)}</p>`,
           ).join("\n          ")}
         </div>
+
+        <h2>HUSUSİ ŞARTLAR</h2>
+        <div class="conditions">
+          ${hususiClauses.map(
+            (c, i) => `<p><strong>${esc(String(conditions.length + i + 1))}.</strong> ${c}</p>`,
+          ).join("\n          ")}
+        </div>
       </div>
       ${signatures(2)}
     </div>`;
@@ -2198,6 +2242,7 @@ function buildContractHtml(
             : ""
         }
 
+        <p class="clause closing">${esc(String(conditions.length + hususiClauses.length))} ( ${esc(toWordsTR(conditions.length + hususiClauses.length)).toLocaleLowerCase("tr")} ) özel maddeden oluşan iş bu sözleşme Kiracı, Kiraya veren ve ${kefil ? "Kefiller" : ""} arasında karşılıklı mutabakata varılarak iki (2) suret olarak düzenlenmiş ve imzaları ile tasdik edilerek yürürlüğe girmiştir.</p>
         <p class="clause closing">İşbu kira kontratı, taraflarca okunarak anlaşılmış ve aşağıda imza altına alınmıştır. Taraflardan her biri, sözleşme metninin birer örneğini teslim almıştır.</p>
         <div class="sig-date">Tarih: ${esc(formatDate(Date.now()))}</div>
       </div>
