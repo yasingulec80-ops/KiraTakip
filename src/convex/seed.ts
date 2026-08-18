@@ -228,3 +228,38 @@ export const seedDemoData = mutation({
     };
   },
 });
+
+
+/**
+ * Tüm tabloları temizler (kullanıcılar hariç).
+ * Demo verilerini sıfırlamak için kullanılır.
+ *
+ * Çağrı: bunx convex run seed:resetAllData
+ */
+export const resetAllData = mutation({
+  handler: async (ctx) => {
+    const tables = [
+      "ledgerEntries",
+      "reminderLogs",
+      "collections",
+      "accruals",
+      "expenses",
+      "contracts",
+      "properties",
+      "owners",
+      "tenants",
+      "settings",
+    ] as const;
+
+    let totalDeleted = 0;
+    for (const table of tables) {
+      const rows = await ctx.db.query(table as any).collect();
+      for (const row of rows) {
+        await ctx.db.delete((row as any)._id);
+        totalDeleted++;
+      }
+    }
+
+    return { deleted: totalDeleted, tables: tables.length };
+  },
+});
