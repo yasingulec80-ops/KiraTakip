@@ -2479,8 +2479,7 @@ function buildContractHtml(
   /** kira bedeli ve banka bilgisi maddeleri otomatik doldurulur */
   const processedSpecial = specialConditions.map((c) => {
     if (c.includes("contract.rentAmount")) {
-      return c.replace("contract.rentAmount", tl(contract.rentAmount))
-        .replace("Bu madde otomatik olarak doldurulacaktır.", toWordsTR(Math.round(contract.rentAmount)) + " Türk Lirası’dır).");
+      return c.replace("contract.rentAmount", tl(contract.rentAmount));
     }
     if (c.includes("banka bilgileri otomatik olarak doldurulacaktır.")) {
       return c.replace("banka bilgileri otomatik olarak doldurulacaktır.",
@@ -2633,7 +2632,7 @@ function buildContractHtml(
             : ""
         }
 
-        <p class="clause closing">${esc(String(conditions.length + processedSpecial.length))} ( ${esc(toWordsTR(conditions.length + processedSpecial.length)).toLocaleLowerCase("tr")} ) özel maddeden oluşan iş bu sözleşme Kiracı, Kiraya veren ve ${kefil ? "Kefiller" : ""} arasında karşılıklı mutabakata varılarak iki (2) suret olarak düzenlenmiş ve imzaları ile tasdik edilerek yürürlüğe girmiştir.</p>
+        <p class="clause closing">${esc(String(conditions.length))} ( ${esc(toWordsTR(conditions.length)).toLocaleLowerCase("tr")} ) genel, ${esc(String(processedSpecial.length))} ( ${esc(toWordsTR(processedSpecial.length)).toLocaleLowerCase("tr")} ) özel hükümden oluşan iş bu sözleşme Kiracı, Kiraya veren ve ${kefil ? "Kefiller" : ""} arasında karşılıklı mutabakata varılarak iki (2) suret olarak düzenlenmiş ve imzaları ile tasdik edilerek yürürlüğe girmiştir.</p>
         <p class="clause closing">İşbu kira kontratı, taraflarca okunarak anlaşılmış ve aşağıda imza altına alınmıştır. Taraflardan her biri, sözleşme metninin birer örneğini teslim almıştır.</p>
         <div class="sig-date">Tarih: ${esc(formatDate(Date.now()))}</div>
       </div>
