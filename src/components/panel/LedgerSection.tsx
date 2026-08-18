@@ -609,8 +609,9 @@ function PersonDetailDialog({
   onDelete?: (entry: LedgerEntry) => void;
 }) {
   const balance = entries.reduce((sum, e) => sum + e.amount, 0);
+  const totalCredit = entries.filter((e) => e.amount > 0).reduce((s, e) => s + e.amount, 0);
+  const totalDebit = entries.filter((e) => e.amount < 0).reduce((s, e) => s + Math.abs(e.amount), 0);
 
-  // Vekil hesabında tahsilat ve devirler kira/depozito olarak ayrı ayrı gösterilir.
   const transfers = entries.filter((e) => e.kind === "transfer");
   const rentTransfers = transfers.filter(
     (e) => !transferIsDeposit(e.description),
@@ -620,8 +621,7 @@ function PersonDetailDialog({
   );
   const vekilCollections = entries.filter(
     (e) =>
-      e.kind === "collection" &&
-      e.description.startsWith("Vekil tahsilatı"),
+      e.kind === "collection" && e.description.startsWith("Vekil tahsilatı"),
   );
   const collectedRent = vekilCollections.filter(
     (e) => !transferIsDeposit(e.description),
@@ -642,7 +642,7 @@ function PersonDetailDialog({
           ? `${PERSON_TYPE_LABEL[account.personType]} cari hesabı · ${account.subtitle}`
           : ""
       }
-      wide
+      xwide
       footer={
         <>
           {onExportCsv && (
@@ -680,107 +680,111 @@ function PersonDetailDialog({
     >
       {account && (
         <div className="space-y-4">
-          <div className="flex items-baseline justify-between border-b border-border pb-3">
-            <p className="eyebrow text-muted-foreground">Bakiye</p>
-            <p
-              className={
-                balance === 0
-                  ? "font-display text-xl font-light tabular-nums"
+          {/* Özet kartları — Borç / Alacak / Bakiye */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="relative overflow-hidden rounded-lg border border-emerald-200 bg-emerald-50/60 p-5">
+              <div className="flex items-center justify-between">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-700/80">Toplam Alacak</p>
+                <span className="inline-flex items-center justify-center rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
+                  {entries.filter((e) => e.amount > 0).length} kayıt
+                </span>
+              </div>
+              <p className="mt-2 font-display text-2xl font-bold tabular-nums text-emerald-800">
+                {formatCurrency(totalCredit)}
+              </p>
+            </div>
+            <div className="relative overflow-hidden rounded-lg border border-amber-200 bg-amber-50/60 p-5">
+              <div className="flex items-center justify-between">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-amber-700/80">Toplam Borç</p>
+                <span className="inline-flex items-center justify-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700">
+                  {entries.filter((e) => e.amount < 0).length} kayıt
+                </span>
+              </div>
+              <p className="mt-2 font-display text-2xl font-bold tabular-nums text-amber-800">
+                {formatCurrency(totalDebit)}
+              </p>
+            </div>
+            <div className={`relative overflow-hidden rounded-lg border p-5 ${
+              balance > 0 ? "border-emerald-200 bg-emerald-50/60" : balance < 0 ? "border-amber-200 bg-amber-50/60" : "border-border bg-card"
+            }`}>
+              <div className="flex items-center justify-between">
+                <p className={`text-[11px] font-semibold uppercase tracking-[0.14em] ${
+                  balance > 0 ? "text-emerald-700/80" : balance < 0 ? "text-amber-700/80" : "text-muted-foreground"
+                }`}>Net Bakiye</p>
+                {balance > 0 && <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700">Alacak</span>}
+                {balance < 0 && <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700">Borç</span>}
+                {balance === 0 && <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">Denge</span>}
+              </div>
+              <p className={`mt-2 font-display text-2xl font-bold tabular-nums ${
+                balance > 0 ? "text-emerald-800" : balance < 0 ? "text-amber-800" : ""
+              }`}>
+                {balance === 0
+                  ? formatCurrency(0)
                   : balance > 0
-                    ? "font-display text-xl font-light tabular-nums text-emerald-700"
-                    : "font-display text-xl font-light tabular-nums text-amber-700"
-              }
-            >
-              {balance === 0
-                ? formatCurrency(0)
-                : balance > 0
-                  ? `${formatCurrency(balance)} alacak`
-                  : `${formatCurrency(-balance)} borç`}
-            </p>
+                    ? `+${formatCurrency(balance)}`
+                    : `-${formatCurrency(-balance)}`}
+              </p>
+            </div>
           </div>
 
+          {/* Vekil özeti — yalnızca vekil hesaplarında */}
           {hasVekilActivity && (
-            <div className="grid gap-px border border-border bg-border sm:grid-cols-2 lg:grid-cols-5">
-              <div className="bg-card p-4">
-                <p className="eyebrow text-muted-foreground">Tahsil Edilen Kira</p>
-                <p className="mt-1.5 font-display text-lg font-light tabular-nums">
-                  {formatCurrency(
-                    collectedRent.reduce((s, e) => s + Math.abs(e.amount), 0),
-                  )}
-                </p>
-                <p className="mt-0.5 text-[11px] text-muted-foreground">
-                  {collectedRent.length} tahsilat kaydı
+            <div className="grid grid-cols-5 gap-px border border-border bg-border">
+              <div className="bg-card p-3">
+                <p className="eyebrow text-muted-foreground">Tahsil Kira</p>
+                <p className="mt-1 font-display text-sm font-medium tabular-nums">
+                  {formatCurrency(collectedRent.reduce((s, e) => s + Math.abs(e.amount), 0))}
                 </p>
               </div>
-              <div className="bg-card p-4">
-                <p className="eyebrow text-muted-foreground">Tahsil Edilen Depozito</p>
-                <p className="mt-1.5 font-display text-lg font-light tabular-nums">
-                  {formatCurrency(
-                    collectedDeposit.reduce((s, e) => s + Math.abs(e.amount), 0),
-                  )}
-                </p>
-                <p className="mt-0.5 text-[11px] text-muted-foreground">
-                  {collectedDeposit.length} tahsilat kaydı
+              <div className="bg-card p-3">
+                <p className="eyebrow text-muted-foreground">Tahsil Depozito</p>
+                <p className="mt-1 font-display text-sm font-medium tabular-nums">
+                  {formatCurrency(collectedDeposit.reduce((s, e) => s + Math.abs(e.amount), 0))}
                 </p>
               </div>
-              <div className="bg-card p-4">
+              <div className="bg-card p-3">
                 <p className="eyebrow text-amber-700">Vekil Borç</p>
-                <p className="mt-1.5 font-display text-lg font-light tabular-nums text-amber-700">
-                  {formatCurrency(
-                    collectedRent.reduce((s, e) => s + Math.abs(e.amount), 0) +
-                      collectedDeposit.reduce(
-                        (s, e) => s + Math.abs(e.amount),
-                        0,
-                      ),
-                  )}
-                </p>
-                <p className="mt-0.5 text-[11px] text-muted-foreground">
-                  tahsil edilen toplam (kira + depozito)
+                <p className="mt-1 font-display text-sm font-medium tabular-nums text-amber-700">
+                  {formatCurrency(collectedRent.reduce((s, e) => s + Math.abs(e.amount), 0) + collectedDeposit.reduce((s, e) => s + Math.abs(e.amount), 0))}
                 </p>
               </div>
-              <div className="bg-card p-4">
+              <div className="bg-card p-3">
                 <p className="eyebrow text-muted-foreground">Kira Devri</p>
-                <p className="mt-1.5 font-display text-lg font-light tabular-nums">
+                <p className="mt-1 font-display text-sm font-medium tabular-nums">
                   {formatCurrency(rentTransfers.reduce((s, e) => s + e.amount, 0))}
                 </p>
-                <p className="mt-0.5 text-[11px] text-muted-foreground">
-                  {rentTransfers.length} teslim kaydı
-                </p>
               </div>
-              <div className="bg-card p-4">
+              <div className="bg-card p-3">
                 <p className="eyebrow text-muted-foreground">Depozito Devri</p>
-                <p className="mt-1.5 font-display text-lg font-light tabular-nums">
-                  {formatCurrency(
-                    depositTransfers.reduce((s, e) => s + e.amount, 0),
-                  )}
-                </p>
-                <p className="mt-0.5 text-[11px] text-muted-foreground">
-                  {depositTransfers.length} iade kaydı
+                <p className="mt-1 font-display text-sm font-medium tabular-nums">
+                  {formatCurrency(depositTransfers.reduce((s, e) => s + e.amount, 0))}
                 </p>
               </div>
             </div>
           )}
 
+          {/* Kayıt listesi */}
           {entries.length === 0 ? (
             <p className="border border-dashed border-border px-4 py-8 text-center text-xs text-muted-foreground">
               Bu hesapta henüz kayıt yok.
             </p>
           ) : (
-            <div className="max-h-80 overflow-y-auto border border-border">
+            <div className="max-h-[55vh] overflow-y-auto rounded-lg border border-border">
               <Table>
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
-                    <TableHead>Tarih</TableHead>
-                    <TableHead>Tür</TableHead>
+                    <TableHead className="w-24">Tarih</TableHead>
+                    <TableHead className="w-28">Tür</TableHead>
                     <TableHead>Açıklama</TableHead>
-                    <TableHead className="text-right">Tutar</TableHead>
-                    <TableHead className="text-right">Eylemler</TableHead>
+                    <TableHead className="text-right w-32">Borç (₺)</TableHead>
+                    <TableHead className="text-right w-32">Alacak (₺)</TableHead>
+                    <TableHead className="text-right w-8">{" "}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {entries.map((e) => (
                     <TableRow key={e._id} className="align-middle">
-                      <TableCell className="text-sm">{formatDate(e.date)}</TableCell>
+                      <TableCell className="text-xs tabular-nums">{formatDate(e.date)}</TableCell>
                       <TableCell>
                         <Badge
                           variant="outline"
@@ -795,25 +799,26 @@ function PersonDetailDialog({
                           {entryKindLabel(e)}
                         </Badge>
                       </TableCell>
-                      <TableCell className="max-w-52 truncate text-sm">
+                      <TableCell className="max-w-64 truncate text-sm">
                         {e.description}
                       </TableCell>
-                      <TableCell
-                        className={`text-right tabular-nums ${
-                          e.amount > 0 ? "text-emerald-700" : "text-amber-700"
-                        }`}
-                      >
-                        {e.amount > 0 ? "+" : "−"}
-                        {formatCurrency(Math.abs(e.amount))}
+                      <TableCell className={`text-right text-sm tabular-nums ${e.amount < 0 ? "text-amber-700 font-medium" : "text-muted-foreground"}`}>
+                        {e.amount < 0 ? formatCurrency(-e.amount) : "—"}
+                      </TableCell>
+                      <TableCell className={`text-right text-sm tabular-nums ${e.amount > 0 ? "text-emerald-700 font-medium" : "text-muted-foreground"}`}>
+                        {e.amount > 0 ? formatCurrency(e.amount) : "—"}
                       </TableCell>
                       <TableCell className="text-right">
-                        {onDelete && e.kind === "adjustment" && (
+                        {onDelete && (
                           <Button
                             type="button"
                             variant="ghost"
                             size="icon"
-                            className="h-7 w-7 rounded-none text-muted-foreground hover:text-destructive"
-                            onClick={() => onDelete(e)}
+                            className="h-7 w-7 rounded-none text-destructive hover:text-destructive"
+                            onClick={(ev) => {
+                              ev.stopPropagation();
+                              onDelete(e);
+                            }}
                             aria-label="Kaydı sil"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
