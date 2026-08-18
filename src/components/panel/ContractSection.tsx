@@ -1474,26 +1474,6 @@ function SpecialConditionsDialog({
 
   }
 
-
-
-/* ------------------------------------------------------------------ */
-
-
-
-/** Özel hükümler — kullanıcı kontrata eklemek istediği hükümleri girer. */
-
-
-
-
-/* ------------------------------------------------------------------ */
-
-
-
-/** Genel koşullar — kayıtlı metin; yönetici düzenleyebilir. */
-
-
-
-
   const submit = async () => {
 
     setSaving(true);
@@ -1510,7 +1490,7 @@ function SpecialConditionsDialog({
 
       await onSave(list);
 
-      toast.success("Genel koşullar kaydedildi.");
+      toast.success("Hususi şartlar kaydedildi.");
 
       onOpenChange(false);
 
@@ -1536,7 +1516,7 @@ function SpecialConditionsDialog({
 
       onOpenChange={onOpenChange}
 
-      title="Genel Koşullar"
+      title="Hususi Şartlar"
 
       description={
 
@@ -1544,7 +1524,7 @@ function SpecialConditionsDialog({
 
           ? "Her satır bir madde olarak kontrata eklenir; kayıtlı metni düzenleyebilirsiniz."
 
-          : "Kontrat belgesine otomatik eklenen kayıtlı genel koşullar. Yalnızca yönetici düzenleyebilir."
+          : "Kontrat belgesine otomatik eklenen hususi şartlar. Yalnızca yönetici düzenleyebilir."
 
       }
 
@@ -1618,7 +1598,7 @@ function SpecialConditionsDialog({
 
           rows={10}
 
-          placeholder="Her satıra bir genel koşul maddesi yazın…"
+          placeholder="Her satıra bir hususi şart maddesi yazın…"
 
           className="w-full rounded-none border border-input bg-transparent px-3 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-0"
 
@@ -1820,7 +1800,7 @@ function GeneralConditionsDialog({
 
       await onSave(list);
 
-      toast.success("Hususi şartlar kaydedildi.");
+      toast.success("Genel koşullar kaydedildi.");
 
       onOpenChange(false);
 
@@ -1846,7 +1826,7 @@ function GeneralConditionsDialog({
 
       onOpenChange={onOpenChange}
 
-      title="Hususi Şartlar"
+      title="Genel Koşullar"
 
       description={
 
