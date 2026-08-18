@@ -1834,7 +1834,7 @@ function GeneralConditionsDialog({
 
           ? "Her satır bir madde olarak kontrata eklenir; kayıtlı metni düzenleyebilirsiniz."
 
-          : "Kontrat belgesine otomatik eklenen hususi şartlar. Yalnızca yönetici düzenleyebilir."
+          : "Kontrat belgesine otomatik eklenen genel koşullar. Yalnızca yönetici düzenleyebilir."
 
       }
 
@@ -1908,7 +1908,7 @@ function GeneralConditionsDialog({
 
           rows={10}
 
-          placeholder="Her satıra bir hususi şart maddesi yazın…"
+          placeholder="Her satıra bir genel koşul maddesi yazın…"
 
           className="w-full rounded-none border border-input bg-transparent px-3 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-0"
 
