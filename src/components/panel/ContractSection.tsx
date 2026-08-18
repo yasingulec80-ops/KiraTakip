@@ -2467,9 +2467,8 @@ function buildContractHtml(
         : toWordsTR(Math.round(contract.depositAmount)) + " Türk Lirası";
       c = c.replace("contract.depositAmount", tl(contract.depositAmount) + " (" + depositText + ")");
     }
-    if (c.includes("contract.depositMonths")) {
-      c = c.replace("contract.depositMonths", String(contract.depositMonths ?? 0));
-    }
+    // depositMonths artık depositAmount içinde yer aldığı için ayrıca değiştirme
+    // (çift "aylık kira bedeli karşılığı" çıkmasını önlemek için)
     if (c.includes("banka bilgileri otomatik olarak doldurulacaktır.")) {
       c = c.replace("banka bilgileri otomatik olarak doldurulacaktır.",
         (paymentPerson ?? owner?.name ?? "—") + " adına " + (owner?.iban ?? "—") + " IBAN nolu " + (owner?.bankName ?? "—") + " hesabını kullanacaktır.");

@@ -516,6 +516,7 @@ export function LedgerSection() {
         account={viewing}
         entries={viewing ? entriesOf(viewing) : []}
         devirable={viewing ? outstandingOf(viewing) : 0}
+        properties={properties}
         onClose={() => setViewing(null)}
         onAddEntry={(account) => {
           setViewing(null);
@@ -591,6 +592,7 @@ function PersonDetailDialog({
   account,
   entries,
   devirable,
+  properties,
   onClose,
   onAddEntry,
   onDevir,
@@ -601,6 +603,7 @@ function PersonDetailDialog({
   account: PersonAccount | null;
   entries: LedgerEntry[];
   devirable: number;
+  properties: { _id: string; name: string; address: string }[] | undefined;
   onClose: () => void;
   onAddEntry: (account: PersonAccount) => void;
   onDevir: (account: PersonAccount) => void;
@@ -608,6 +611,12 @@ function PersonDetailDialog({
   onExportPdf?: () => void;
   onDelete?: (entry: LedgerEntry) => void;
 }) {
+  const propertyMap = useMemo(() => {
+    const map = new Map<string, { name: string; address: string }>();
+    for (const p of properties ?? []) map.set(p._id, p);
+    return map;
+  }, [properties]);
+
   const balance = entries.reduce((sum, e) => sum + e.amount, 0);
   const totalCredit = entries.filter((e) => e.amount > 0).reduce((s, e) => s + e.amount, 0);
   const totalDebit = entries.filter((e) => e.amount < 0).reduce((s, e) => s + Math.abs(e.amount), 0);
@@ -800,7 +809,9 @@ function PersonDetailDialog({
                         </Badge>
                       </TableCell>
                       <TableCell className="max-w-64 truncate text-sm">
-                        {e.description}
+                        {e.propertyId && propertyMap.has(e.propertyId.toString())
+                          ? `${propertyMap.get(e.propertyId.toString())!.name} · ${e.description}`
+                          : e.description}
                       </TableCell>
                       <TableCell className={`text-right text-sm tabular-nums ${e.amount < 0 ? "text-amber-700 font-medium" : "text-muted-foreground"}`}>
                         {e.amount < 0 ? formatCurrency(-e.amount) : "—"}
