@@ -328,7 +328,7 @@ export default function Panel() {
               <span>
                 Yetkili olduğunuz gayrimenkuller:{" "}
                 <span className="font-medium text-foreground">
-                  {isAdmin ? "tümü" : `${(properties ?? []).length}`}
+                  {isAdmin ? "Tüm gayrimenkuller" : `${(properties ?? []).length}`}
                 </span>
               </span>
             </div>

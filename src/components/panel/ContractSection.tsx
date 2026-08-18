@@ -1941,9 +1941,10 @@ const CONTRACT_STYLES = `
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
   body {
-    font-family: "Georgia", "Times New Roman", serif;
+    font-family: "Times New Roman", "Georgia", serif;
     color: #2b2722;
-    font-size: 12.5px;
+    font-size: 12pt;
+    font-style: normal;
     line-height: 1.75;
     background: #ece8df;
   }
