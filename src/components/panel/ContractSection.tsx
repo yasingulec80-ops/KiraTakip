@@ -2479,10 +2479,13 @@ function buildContractHtml(
   /** kira bedeli ve banka bilgisi maddeleri otomatik doldurulur */
   const processedSpecial = specialConditions.map((c) => {
     if (c.includes("contract.rentAmount")) {
-      return c.replace("contract.rentAmount", tl(contract.rentAmount));
+      c = c.replace("contract.rentAmount", tl(contract.rentAmount));
+    }
+    if (c.includes("contract.depositAmount")) {
+      c = c.replace("contract.depositAmount", tl(contract.depositAmount) + " (" + toWordsTR(Math.round(contract.depositAmount)) + " Türk Lirası)");
     }
     if (c.includes("banka bilgileri otomatik olarak doldurulacaktır.")) {
-      return c.replace("banka bilgileri otomatik olarak doldurulacaktır.",
+      c = c.replace("banka bilgileri otomatik olarak doldurulacaktır.",
         (paymentPerson ?? owner?.name ?? "—") + " adına " + (owner?.iban ?? "—") + " IBAN nolu " + (owner?.bankName ?? "—") + " hesabını kullanacaktır.");
     }
     return c;
@@ -2614,7 +2617,7 @@ function buildContractHtml(
         <h2>HUSUSİ ŞARTLAR</h2>
         <div class="conditions">
           ${processedSpecial.map(
-            (c, i) => `<p><strong>${esc(String(conditions.length + i + 1))}.</strong> ${c}</p>`,
+            (c, i) => `<p><strong>${esc(String(i + 1))}.</strong> ${c}</p>`,
           ).join("\n          ")}
         </div>
       </div>
