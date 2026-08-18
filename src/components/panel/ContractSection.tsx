@@ -2482,7 +2482,13 @@ function buildContractHtml(
       c = c.replace("contract.rentAmount", tl(contract.rentAmount));
     }
     if (c.includes("contract.depositAmount")) {
-      c = c.replace("contract.depositAmount", tl(contract.depositAmount) + " (" + toWordsTR(Math.round(contract.depositAmount)) + " Türk Lirası)");
+      const depositText = contract.depositMonths && contract.depositMonths > 0
+        ? `${contract.depositMonths} aylık kira bedeli karşılığı`
+        : toWordsTR(Math.round(contract.depositAmount)) + " Türk Lirası";
+      c = c.replace("contract.depositAmount", tl(contract.depositAmount) + " (" + depositText + ")");
+    }
+    if (c.includes("contract.depositMonths")) {
+      c = c.replace("contract.depositMonths", String(contract.depositMonths ?? 0));
     }
     if (c.includes("banka bilgileri otomatik olarak doldurulacaktır.")) {
       c = c.replace("banka bilgileri otomatik olarak doldurulacaktır.",
