@@ -213,7 +213,10 @@ export function ContractSection() {
   const generateAccruals = useMutation(api.contracts.generateAccruals);
   const generalConditions = useQuery(api.settings.getGeneralConditions);
   const updateGeneralConditions = useMutation(api.settings.updateGeneralConditions);
+  const specialConditions = useQuery(api.settings.getSpecialConditions);
+  const updateSpecialConditions = useMutation(api.settings.updateSpecialConditions);
   const effectiveConditions = generalConditions ?? GENERAL_CONDITIONS;
+  const effectiveSpecialConditions = specialConditions ?? [];
 
   const [search, setSearch] = useState("");
   const [from, setFrom] = useState("");
@@ -408,7 +411,7 @@ export function ContractSection() {
     const property = propertyMap.get(c.propertyId.toString());
     const owner = ownerMap.get(c.ownerId.toString());
     const tenant = tenantMap.get(c.tenantId.toString());
-    printHtmlDocument(buildContractHtml(c, owner, tenant, property, effectiveConditions));
+    printHtmlDocument(buildContractHtml(c, owner, tenant, property, effectiveConditions, effectiveSpecialConditions));
     toast.success("Kontrat belgesi yazdırma için hazırlanıyor.");
   };
 
@@ -579,8 +582,10 @@ export function ContractSection() {
         tenants={tenants ?? []}
         onSave={handleSave}
         conditions={effectiveConditions}
+        specialConditions={effectiveSpecialConditions}
         isAdmin={isAdmin}
         onUpdateConditions={(list) => updateGeneralConditions({ conditions: list })}
+        onUpdateSpecialConditions={(list) => updateSpecialConditions({ conditions: list })}
       />
 
       <ContractDetailDialog
@@ -604,6 +609,7 @@ export function ContractSection() {
         owner={preview ? ownerMap.get(preview.ownerId.toString()) : undefined}
         tenant={preview ? tenantMap.get(preview.tenantId.toString()) : undefined}
         conditions={effectiveConditions}
+        specialConditions={effectiveSpecialConditions}
         onPrint={
           preview
             ? () =>
@@ -614,6 +620,7 @@ export function ContractSection() {
                     tenantMap.get(preview.tenantId.toString()),
                     propertyMap.get(preview.propertyId.toString()),
                     effectiveConditions,
+                    effectiveSpecialConditions,
                   ),
                 )
             : undefined
@@ -657,8 +664,10 @@ function ContractFormDialog({
   tenants,
   onSave,
   conditions,
+  specialConditions,
   isAdmin,
   onUpdateConditions,
+  onUpdateSpecialConditions,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -668,13 +677,16 @@ function ContractFormDialog({
   tenants: Tenant[];
   onSave: (form: ContractFormState) => void;
   conditions: string[];
+  specialConditions: string[];
   isAdmin: boolean;
   onUpdateConditions: (conditions: string[]) => Promise<unknown>;
+  onUpdateSpecialConditions: (conditions: string[]) => Promise<unknown>;
 }) {
   const [form, setForm] = useState<ContractFormState>(emptyForm);
   const [error, setError] = useState<string | null>(null);
   const [ozelHukumlerOpen, setOzelHukumlerOpen] = useState(false);
   const [genelKosullarOpen, setGenelKosullarOpen] = useState(false);
+  const [hususiSartlarOpen, setHususiSartlarOpen] = useState(false);
   const tuik = useQuery(api.settings.getTuikInflation);
   const updateTuik = useMutation(api.settings.updateTuikInflation);
   const [tuikEdit, setTuikEdit] = useState("");
@@ -1374,6 +1386,20 @@ function ContractFormDialog({
               </span>
             </span>
           </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="flex w-full items-start rounded-none p-4 text-left"
+            onClick={() => setHususiSartlarOpen(true)}
+          >
+            <ScrollText className="mr-3 h-5 w-5 shrink-0 text-muted-foreground" />
+            <span>
+              <span className="block text-sm font-medium">Hususi Şartlar</span>
+              <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                Kayıtlı {specialConditions.length} madde kontrata otomatik eklenir.
+              </span>
+            </span>
+          </Button>
         </div>
       </div>
       </DialogShell>
@@ -1392,168 +1418,529 @@ function ContractFormDialog({
         isAdmin={isAdmin}
         onSave={onUpdateConditions}
       />
+
+      <SpecialConditionsDialog
+        open={hususiSartlarOpen}
+        onOpenChange={setHususiSartlarOpen}
+        conditions={specialConditions}
+        isAdmin={isAdmin}
+        onSave={onUpdateSpecialConditions}
+      />
     </>
   );
 }
 
 /* ------------------------------------------------------------------ */
 
-/** Özel hükümler — kullanıcı kontrata eklemek istediği hükümleri girer. */
-function SpecialProvisionsDialog({
+function SpecialConditionsDialog({
+
   open,
+
   onOpenChange,
-  value,
+
+  conditions,
+
+  isAdmin,
+
   onSave,
+
 }: {
+
   open: boolean;
+
   onOpenChange: (open: boolean) => void;
-  value: string;
-  onSave: (value: string) => void;
+
+  conditions: string[];
+
+  isAdmin: boolean;
+
+  onSave: (conditions: string[]) => Promise<unknown>;
+
 }) {
-  const [text, setText] = useState(value);
+
+  const [text, setText] = useState("");
+
+  const [saving, setSaving] = useState(false);
+
   const [lastKey, setLastKey] = useState("");
+
   const key = open ? "open" : "closed";
+
   if (key !== lastKey) {
+
     setLastKey(key);
-    setText(value);
+
+    setText(conditions.join("\n"));
+
   }
 
-  return (
-    <DialogShell
-      open={open}
-      onOpenChange={onOpenChange}
-      title="Özel Hükümler"
-      description="Kontratın Özel Hükümler bölümüne eklenecek metni yazın."
-      footer={
-        <>
-          <Button
-            type="button"
-            variant="outline"
-            className="rounded-none"
-            onClick={() => onOpenChange(false)}
-          >
-            Vazgeç
-          </Button>
-          <Button
-            type="button"
-            className="rounded-none"
-            onClick={() => {
-              onSave(text.trim());
-              onOpenChange(false);
-            }}
-          >
-            Uygula
-          </Button>
-        </>
-      }
-    >
-      <textarea
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        rows={9}
-        placeholder="Kontrata eklemek istediğiniz özel hükümleri yazın…"
-        className="w-full rounded-none border border-input bg-transparent px-3 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-0"
-      />
-    </DialogShell>
-  );
-}
+
 
 /* ------------------------------------------------------------------ */
+
+
+
+/** Özel hükümler — kullanıcı kontrata eklemek istediği hükümleri girer. */
+
+
+
+
+/* ------------------------------------------------------------------ */
+
+
 
 /** Genel koşullar — kayıtlı metin; yönetici düzenleyebilir. */
-function GeneralConditionsDialog({
-  open,
-  onOpenChange,
-  conditions,
-  isAdmin,
-  onSave,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  conditions: string[];
-  isAdmin: boolean;
-  onSave: (conditions: string[]) => Promise<unknown>;
-}) {
-  const [text, setText] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [lastKey, setLastKey] = useState("");
-  const key = open ? "open" : "closed";
-  if (key !== lastKey) {
-    setLastKey(key);
-    setText(conditions.join("\n"));
-  }
+
+
+
 
   const submit = async () => {
+
     setSaving(true);
+
     try {
+
       const list = text
+
         .split(/\r?\n/)
+
         .map((s) => s.trim())
+
         .filter((s) => s !== "");
+
       await onSave(list);
+
       toast.success("Genel koşullar kaydedildi.");
+
       onOpenChange(false);
+
     } catch (err) {
+
       toast.error(err instanceof Error ? err.message : "Kayıt başarısız.");
+
     } finally {
+
       setSaving(false);
+
     }
+
   };
 
+
+
   return (
+
     <DialogShell
+
       open={open}
+
       onOpenChange={onOpenChange}
+
       title="Genel Koşullar"
+
       description={
+
         isAdmin
+
           ? "Her satır bir madde olarak kontrata eklenir; kayıtlı metni düzenleyebilirsiniz."
+
           : "Kontrat belgesine otomatik eklenen kayıtlı genel koşullar. Yalnızca yönetici düzenleyebilir."
+
       }
+
       footer={
+
         <>
+
           <Button
+
             type="button"
+
             variant="outline"
+
             className="rounded-none"
+
             onClick={() => onOpenChange(false)}
+
           >
+
             {isAdmin ? "Vazgeç" : "Kapat"}
+
           </Button>
+
           {isAdmin && (
+
             <Button
+
               type="button"
+
               className="rounded-none"
+
               onClick={submit}
+
               disabled={saving}
+
             >
+
               {saving ? "Kaydediliyor…" : "Kaydet"}
+
             </Button>
+
           )}
+
         </>
+
       }
+
     >
+
       <ol className="mb-4 max-h-44 space-y-1 overflow-y-auto border border-border bg-muted/20 p-3 text-xs leading-5 text-muted-foreground">
+
         {conditions.map((c, i) => (
+
           <li key={i}>
+
             <strong className="text-foreground">Madde {i + 1}.</strong> {c}
+
           </li>
+
         ))}
+
       </ol>
+
       {isAdmin && (
+
         <textarea
+
           value={text}
+
           onChange={(e) => setText(e.target.value)}
+
           rows={10}
+
           placeholder="Her satıra bir genel koşul maddesi yazın…"
+
           className="w-full rounded-none border border-input bg-transparent px-3 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-0"
+
         />
+
       )}
+
     </DialogShell>
+
   );
+
 }
 
 /* ------------------------------------------------------------------ */
+
+function SpecialProvisionsDialog({
+
+  open,
+
+  onOpenChange,
+
+  value,
+
+  onSave,
+
+}: {
+
+  open: boolean;
+
+  onOpenChange: (open: boolean) => void;
+
+  value: string;
+
+  onSave: (value: string) => void;
+
+}) {
+
+  const [text, setText] = useState(value);
+
+  const [lastKey, setLastKey] = useState("");
+
+  const key = open ? "open" : "closed";
+
+  if (key !== lastKey) {
+
+    setLastKey(key);
+
+    setText(value);
+
+  }
+
+
+
+  return (
+
+    <DialogShell
+
+      open={open}
+
+      onOpenChange={onOpenChange}
+
+      title="Özel Hükümler"
+
+      description="Kontratın Özel Hükümler bölümüne eklenecek metni yazın."
+
+      footer={
+
+        <>
+
+          <Button
+
+            type="button"
+
+            variant="outline"
+
+            className="rounded-none"
+
+            onClick={() => onOpenChange(false)}
+
+          >
+
+            Vazgeç
+
+          </Button>
+
+          <Button
+
+            type="button"
+
+            className="rounded-none"
+
+            onClick={() => {
+
+              onSave(text.trim());
+
+              onOpenChange(false);
+
+            }}
+
+          >
+
+            Uygula
+
+          </Button>
+
+        </>
+
+      }
+
+    >
+
+      <textarea
+
+        value={text}
+
+        onChange={(e) => setText(e.target.value)}
+
+        rows={9}
+
+        placeholder="Kontrata eklemek istediğiniz özel hükümleri yazın…"
+
+        className="w-full rounded-none border border-input bg-transparent px-3 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-0"
+
+      />
+
+    </DialogShell>
+
+  );
+
+}
+
+/* ------------------------------------------------------------------ */
+
+function GeneralConditionsDialog({
+
+  open,
+
+  onOpenChange,
+
+  conditions,
+
+  isAdmin,
+
+  onSave,
+
+}: {
+
+  open: boolean;
+
+  onOpenChange: (open: boolean) => void;
+
+  conditions: string[];
+
+  isAdmin: boolean;
+
+  onSave: (conditions: string[]) => Promise<unknown>;
+
+}) {
+
+  const [text, setText] = useState("");
+
+  const [saving, setSaving] = useState(false);
+
+  const [lastKey, setLastKey] = useState("");
+
+  const key = open ? "open" : "closed";
+
+  if (key !== lastKey) {
+
+    setLastKey(key);
+
+    setText(conditions.join("\n"));
+
+  }
+
+
+
+
+
+/* ------------------------------------------------------------------ */
+
+
+
+
+
+  const submit = async () => {
+
+    setSaving(true);
+
+    try {
+
+      const list = text
+
+        .split(/\r?\n/)
+
+        .map((s) => s.trim())
+
+        .filter((s) => s !== "");
+
+      await onSave(list);
+
+      toast.success("Hususi şartlar kaydedildi.");
+
+      onOpenChange(false);
+
+    } catch (err) {
+
+      toast.error(err instanceof Error ? err.message : "Kayıt başarısız.");
+
+    } finally {
+
+      setSaving(false);
+
+    }
+
+  };
+
+
+
+  return (
+
+    <DialogShell
+
+      open={open}
+
+      onOpenChange={onOpenChange}
+
+      title="Hususi Şartlar"
+
+      description={
+
+        isAdmin
+
+          ? "Her satır bir madde olarak kontrata eklenir; kayıtlı metni düzenleyebilirsiniz."
+
+          : "Kontrat belgesine otomatik eklenen hususi şartlar. Yalnızca yönetici düzenleyebilir."
+
+      }
+
+      footer={
+
+        <>
+
+          <Button
+
+            type="button"
+
+            variant="outline"
+
+            className="rounded-none"
+
+            onClick={() => onOpenChange(false)}
+
+          >
+
+            {isAdmin ? "Vazgeç" : "Kapat"}
+
+          </Button>
+
+          {isAdmin && (
+
+            <Button
+
+              type="button"
+
+              className="rounded-none"
+
+              onClick={submit}
+
+              disabled={saving}
+
+            >
+
+              {saving ? "Kaydediliyor…" : "Kaydet"}
+
+            </Button>
+
+          )}
+
+        </>
+
+      }
+
+    >
+
+      <ol className="mb-4 max-h-44 space-y-1 overflow-y-auto border border-border bg-muted/20 p-3 text-xs leading-5 text-muted-foreground">
+
+        {conditions.map((c, i) => (
+
+          <li key={i}>
+
+            <strong className="text-foreground">Madde {i + 1}.</strong> {c}
+
+          </li>
+
+        ))}
+
+      </ol>
+
+      {isAdmin && (
+
+        <textarea
+
+          value={text}
+
+          onChange={(e) => setText(e.target.value)}
+
+          rows={10}
+
+          placeholder="Her satıra bir hususi şart maddesi yazın…"
+
+          className="w-full rounded-none border border-input bg-transparent px-3 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-0"
+
+        />
+
+      )}
+
+    </DialogShell>
+
+  );
+
+}
 
 function ContractDetailDialog({
   contract,
@@ -2063,6 +2450,7 @@ function buildContractHtml(
   tenant?: Tenant,
   property?: Property,
   conditions: string[] = GENERAL_CONDITIONS,
+  specialConditions: string[] = [],
 ): string {
   const esc = (value: string | number | null | undefined) =>
     String(value ?? "—")
@@ -2086,16 +2474,20 @@ function buildContractHtml(
   const hasEviction = contract.evictionCommitment === true;
   const TOTAL_PAGES = hasEviction ? 4 : 3;
 
-  /** Hususi şartlar — dinamik maddeler (malik/vekil banka bilgisi, kira bedeli vb.) */
+  /** Hususi şartlar — DB'den gelen maddeler, dinamik olarak işlenir */
   const paymentPerson = owner?.proxy ? owner.proxy.name : owner?.name;
-  const hususiClauses = [
-    "Kiracı, bakım, satış ya da sonraki kiralama için zorunlu olduğu ölçüde, kiraya verenin ve onun belirlediği üçüncü kişinin kiralananı gezip görmesine izin vermekle yükümlüdür.",
-    "Aylık kira bedeli " + tl(contract.rentAmount) + " (" + toWordsTR(Math.round(contract.rentAmount)) + " Türk Lirası’dır).",
-    "Kira, her ayın 1 ile 5’i arası aşağıdaki belirtilmiş olan banka hesabına kesintisiz havale edilecektir. " + (paymentPerson ?? owner?.name ?? "—") + " adına " + (owner?.iban ?? "—") + " IBAN nolu " + (owner?.bankName ?? "—") + " hesabını kullanacaktır.",
-    kefil ? "Kefillerin kefaleti müteselsil ve müşterek borçlu sıfatıyla olup, kontratın devamı ve yenilenmesi sürecesince akdin karşıklı feshine kadar geçerlidir. Bu süreçte kefil azlini isteyemez.  Kefil, kira bedeli, bina genel gideri ve her türlü yan gider, elektrik, su, doğalgaz vb kullanım bedelleri gibi kiracının ödemek zorunda bulunduğu her türlü bedelden ve borçtan kiracılık sürecesince müteselsil borçlu sıfatıyla sorumlu olduğu gibi kiracının binaya ve çevreye verdiği her türlü zarardan da yine müteselsil borçlu sıfatıyla her türlü masraf ve vekâlet ücretleri de dâhil olmak üzere sorumludur." : "",
-    "İş bu kontrattan doğabilecek ihtilaflar halinde İstanbul Anadolu Adliyesi Mahkemeleri ve İcra Daireleri yetkilidir.",
-    "Bu sözleşmede yazılı bulunmayan hükümlere ihtiyaç duyulduğunda 6570 sayılı Kira Kanunu, Medeni Kanunu, Borçlar Kanunu, 634 sayılı Kat Mülkiyeti Kanununun ve Diğer yürürlükteki alakalı kanun ve Yargıtay kararları uygulanır.",
-  ];
+  /** kira bedeli ve banka bilgisi maddeleri otomatik doldurulur */
+  const processedSpecial = specialConditions.map((c) => {
+    if (c.includes("contract.rentAmount")) {
+      return c.replace("contract.rentAmount", tl(contract.rentAmount))
+        .replace("Bu madde otomatik olarak doldurulacaktır.", toWordsTR(Math.round(contract.rentAmount)) + " Türk Lirası’dır).");
+    }
+    if (c.includes("banka bilgileri otomatik olarak doldurulacaktır.")) {
+      return c.replace("banka bilgileri otomatik olarak doldurulacaktır.",
+        (paymentPerson ?? owner?.name ?? "—") + " adına " + (owner?.iban ?? "—") + " IBAN nolu " + (owner?.bankName ?? "—") + " hesabını kullanacaktır.");
+    }
+    return c;
+  }).filter(Boolean);
 
   /** Her sayfanın altına imza alanları — isimler otomatik doldurulur. */
   const signatures = (page: number) => {
@@ -2116,15 +2508,14 @@ function buildContractHtml(
   };
 
   const runningHead =
-    '<div class="doc-head running"><span class="meta">Kira Kontratı</span><span class="meta">Kira Takip · Gayrimenkul Yönetim Paneli</span></div>';
+    '<div class="doc-head running"><span class="meta">Kira Kontratı</span></div>';
 
   const page1 = `
     <div class="page">
       <div class="content">
         <div class="doc-head">
           <h1>KİRA KONTRATI</h1>
-          <div class="meta">Kira Takip · Gayrimenkul Yönetim Paneli</div>
-        </div>
+          </div>
         <p class="clause">İşbu kira kontratı, aşağıda kimlik bilgileri yer alan taraflar arasında, aşağıda yazılı koşullarla düzenlenmiştir.</p>
 
         <h2>MADDE 1 — TARAFLAR</h2>
@@ -2223,7 +2614,7 @@ function buildContractHtml(
 
         <h2>HUSUSİ ŞARTLAR</h2>
         <div class="conditions">
-          ${hususiClauses.filter(Boolean).map(
+          ${processedSpecial.map(
             (c, i) => `<p><strong>${esc(String(conditions.length + i + 1))}.</strong> ${c}</p>`,
           ).join("\n          ")}
         </div>
@@ -2242,7 +2633,7 @@ function buildContractHtml(
             : ""
         }
 
-        <p class="clause closing">${esc(String(conditions.length + hususiClauses.filter(Boolean).length))} ( ${esc(toWordsTR(conditions.length + hususiClauses.filter(Boolean).length)).toLocaleLowerCase("tr")} ) özel maddeden oluşan iş bu sözleşme Kiracı, Kiraya veren ve ${kefil ? "Kefiller" : ""} arasında karşılıklı mutabakata varılarak iki (2) suret olarak düzenlenmiş ve imzaları ile tasdik edilerek yürürlüğe girmiştir.</p>
+        <p class="clause closing">${esc(String(conditions.length + processedSpecial.length))} ( ${esc(toWordsTR(conditions.length + processedSpecial.length)).toLocaleLowerCase("tr")} ) özel maddeden oluşan iş bu sözleşme Kiracı, Kiraya veren ve ${kefil ? "Kefiller" : ""} arasında karşılıklı mutabakata varılarak iki (2) suret olarak düzenlenmiş ve imzaları ile tasdik edilerek yürürlüğe girmiştir.</p>
         <p class="clause closing">İşbu kira kontratı, taraflarca okunarak anlaşılmış ve aşağıda imza altına alınmıştır. Taraflardan her biri, sözleşme metninin birer örneğini teslim almıştır.</p>
         <div class="sig-date">Tarih: ${esc(formatDate(Date.now()))}</div>
       </div>
@@ -2256,8 +2647,7 @@ function buildContractHtml(
       <div class="content">
         <div class="doc-head">
           <h1>TAHLİYE TAAHHÜTNAMESİ</h1>
-          <div class="meta">Kira Takip · Gayrimenkul Yönetim Paneli</div>
-        </div>
+          </div>
         <p class="clause">Ben, aşağıda kimlik bilgileri yazılı kiracı ${esc(tenant?.name ?? "—")}${
           tenant?.tcNo ? ` (TC Kimlik No: ${esc(tenant.tcNo)})` : ""
         }; ${esc(property?.name ?? "—")} adresindeki taşınmazı, ${esc(
@@ -2310,6 +2700,7 @@ function ContractPreviewDialog({
   owner,
   tenant,
   conditions,
+  specialConditions,
   onClose,
   onPrint,
 }: {
@@ -2318,15 +2709,16 @@ function ContractPreviewDialog({
   owner?: Owner;
   tenant?: Tenant;
   conditions?: string[];
+  specialConditions?: string[];
   onClose: () => void;
   onPrint?: () => void;
 }) {
   const html = useMemo(
     () =>
       contract
-        ? buildContractHtml(contract, owner, tenant, property, conditions)
+        ? buildContractHtml(contract, owner, tenant, property, conditions, specialConditions)
         : "",
-    [contract, property, owner, tenant, conditions],
+    [contract, property, owner, tenant, conditions, specialConditions],
   );
 
   return (

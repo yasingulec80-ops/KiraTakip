@@ -292,6 +292,7 @@ const schema = defineSchema(
       notifyTenant: v.optional(v.boolean()), // kiracıya e-posta
       notifyOwner: v.optional(v.boolean()), // malike e-posta
       generalConditions: v.optional(v.array(v.string())), // kontrat genel koşulları (madde listesi)
+      specialConditions: v.optional(v.array(v.string())), // kontrat hususi şartları (madde listesi)
       cpi12MonthAvg: v.optional(v.number()), // TÜFE 12 aylık ortalama oranı (%)
     }).index("by_key", ["key"]),
 
