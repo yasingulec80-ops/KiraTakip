@@ -2090,9 +2090,9 @@ function buildContractHtml(
   const paymentPerson = owner?.proxy ? owner.proxy.name : owner?.name;
   const hususiClauses = [
     "Kiracı, bakım, satış ya da sonraki kiralama için zorunlu olduğu ölçüde, kiraya verenin ve onun belirlediği üçüncü kişinin kiralananı gezip görmesine izin vermekle yükümlüdür.",
-    "Aylık kira bedeli " + esc(tl(contract.rentAmount)) + " (" + esc(toWordsTR(Math.round(contract.rentAmount))) + " Türk Lirası’dır).",
-    "Kira, her ayın 1 ile 5’i arası aşağıdaki belirtilmiş olan banka hesabına kesintisiz havale edilecektir. " + esc(paymentPerson ?? owner?.name ?? "—") + " adına " + esc(owner?.iban ?? "—") + " IBAN nolu " + esc(owner?.bankName ?? "—") + " hesabını kullanacaktır.",
-    "Kefillerin kefaleti müteselsil ve müşterek borçlu sıfatıyla olup, kontratın devamı ve yenilenmesi sürecesince akdin karşıklı feshine kadar geçerlidir. Bu süreçte kefil azlini isteyemez.  Kefil, kira bedeli, bina genel gideri ve her türlü yan gider, elektrik, su, doğalgaz vb kullanım bedelleri gibi kiracının ödemek zorunda bulunduğu her türlü bedelden ve borçtan kiracılık sürecesince müteselsil borçlu sıfatıyla sorumlu olduğu gibi kiracının binaya ve çevreye verdiği her türlü zarardan da yine müteselsil borçlu sıfatıyla her türlü masraf ve vekâlet ücretleri de dâhil olmak üzere sorumludur.",
+    "Aylık kira bedeli " + tl(contract.rentAmount) + " (" + toWordsTR(Math.round(contract.rentAmount)) + " Türk Lirası’dır).",
+    "Kira, her ayın 1 ile 5’i arası aşağıdaki belirtilmiş olan banka hesabına kesintisiz havale edilecektir. " + (paymentPerson ?? owner?.name ?? "—") + " adına " + (owner?.iban ?? "—") + " IBAN nolu " + (owner?.bankName ?? "—") + " hesabını kullanacaktır.",
+    kefil ? "Kefillerin kefaleti müteselsil ve müşterek borçlu sıfatıyla olup, kontratın devamı ve yenilenmesi sürecesince akdin karşıklı feshine kadar geçerlidir. Bu süreçte kefil azlini isteyemez.  Kefil, kira bedeli, bina genel gideri ve her türlü yan gider, elektrik, su, doğalgaz vb kullanım bedelleri gibi kiracının ödemek zorunda bulunduğu her türlü bedelden ve borçtan kiracılık sürecesince müteselsil borçlu sıfatıyla sorumlu olduğu gibi kiracının binaya ve çevreye verdiği her türlü zarardan da yine müteselsil borçlu sıfatıyla her türlü masraf ve vekâlet ücretleri de dâhil olmak üzere sorumludur." : "",
     "İş bu kontrattan doğabilecek ihtilaflar halinde İstanbul Anadolu Adliyesi Mahkemeleri ve İcra Daireleri yetkilidir.",
     "Bu sözleşmede yazılı bulunmayan hükümlere ihtiyaç duyulduğunda 6570 sayılı Kira Kanunu, Medeni Kanunu, Borçlar Kanunu, 634 sayılı Kat Mülkiyeti Kanununun ve Diğer yürürlükteki alakalı kanun ve Yargıtay kararları uygulanır.",
   ];
@@ -2223,7 +2223,7 @@ function buildContractHtml(
 
         <h2>HUSUSİ ŞARTLAR</h2>
         <div class="conditions">
-          ${hususiClauses.map(
+          ${hususiClauses.filter(Boolean).map(
             (c, i) => `<p><strong>${esc(String(conditions.length + i + 1))}.</strong> ${c}</p>`,
           ).join("\n          ")}
         </div>
@@ -2242,7 +2242,7 @@ function buildContractHtml(
             : ""
         }
 
-        <p class="clause closing">${esc(String(conditions.length + hususiClauses.length))} ( ${esc(toWordsTR(conditions.length + hususiClauses.length)).toLocaleLowerCase("tr")} ) özel maddeden oluşan iş bu sözleşme Kiracı, Kiraya veren ve ${kefil ? "Kefiller" : ""} arasında karşılıklı mutabakata varılarak iki (2) suret olarak düzenlenmiş ve imzaları ile tasdik edilerek yürürlüğe girmiştir.</p>
+        <p class="clause closing">${esc(String(conditions.length + hususiClauses.filter(Boolean).length))} ( ${esc(toWordsTR(conditions.length + hususiClauses.filter(Boolean).length)).toLocaleLowerCase("tr")} ) özel maddeden oluşan iş bu sözleşme Kiracı, Kiraya veren ve ${kefil ? "Kefiller" : ""} arasında karşılıklı mutabakata varılarak iki (2) suret olarak düzenlenmiş ve imzaları ile tasdik edilerek yürürlüğe girmiştir.</p>
         <p class="clause closing">İşbu kira kontratı, taraflarca okunarak anlaşılmış ve aşağıda imza altına alınmıştır. Taraflardan her biri, sözleşme metninin birer örneğini teslim almıştır.</p>
         <div class="sig-date">Tarih: ${esc(formatDate(Date.now()))}</div>
       </div>
