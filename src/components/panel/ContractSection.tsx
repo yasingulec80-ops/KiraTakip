@@ -2628,35 +2628,54 @@ function buildContractHtml(
     </div>`;
 
   // Tahliye taahhütnamesi — ayrı sayfa (yalnızca evictionCommitment seçiliyse).
+  const evictionSigner = owner?.proxy ? owner.proxy.name : (owner?.name ?? "—");
+  const commitDate = contract.evictionCommitmentDate
+    ? formatDate(contract.evictionCommitmentDate)
+    : "—";
+  const evictDate = contract.evictionDate
+    ? formatDate(contract.evictionDate)
+    : "—";
+
   const page4 = hasEviction
     ? `
     <div class="page">
       <div class="content">
         <div class="doc-head">
           <h1>TAHLİYE TAAHHÜTNAMESİ</h1>
-          </div>
-        <p class="clause">Ben, aşağıda kimlik bilgileri yazılı kiracı ${esc(tenant?.name ?? "—")}${
-          tenant?.tcNo ? ` (TC Kimlik No: ${esc(tenant.tcNo)})` : ""
-        }; ${esc(property?.name ?? "—")} adresindeki taşınmazı, ${esc(
-          contract.evictionDate ? formatDate(contract.evictionDate) : "—",
-        )} tarihinde, herhangi bir ihtara gerek kalmaksızın, aynen ve tahliye edilmiş olarak boşaltmayı ve kiraya verene teslim etmeyi kabul ve taahhüt ederim.</p>
-        <p class="clause">İşbu tahliye taahhütnamesi, 6098 sayılı Türk Borçlar Kanunu'nun 352. maddesi uyarınca düzenlenmiş olup imza tarihinden itibaren geçerlidir. Taahhüt edilen tarihte tahliye gerçekleşmediği takdirde kiraya verenin yasal hakları saklıdır.</p>
+        </div>
+
+        <p class="clause">Ben …………${esc(tenant?.name ?? "—")}………… ile Kiraya Veren …………${esc(evictionSigner)}………… arasında imzalanan Kira Sözleşmesi uyarınca Mecur’da kiracı sıfatı ile bulunmaktayız.</p>
+
+        <p class="clause">Halen Kiracı olarak kullanmakta olduğumuz yukarıda açık adresi yazılı Mecur’u, yukarıda belirtilen tarihte, hiçbir ihtar ve ihbara veya başkaca herhangi bir hukuki işleme gerek kalmaksızın kayıtsız ve şartsız olarak, 6098 sayılı Türk Borçlar Kanunu (\"TBK\")’nın 352/1 maddesi gereğince, tarafımıza teslim edilen Mecur’da bulunan dekorasyon ve demirbaşlar konutta bulunan tüm eşyalar kullanılabilir ve çalışır vaziyette tam ve sağlam olarak Tahliye Tarihi’nde teslim ederek Kiraya Veren …………${esc(evictionSigner)}………… ’ya teslim edeceğimizi gayrikabili rücu kabul beyan ve taahhüt ederiz.</p>
+
+        <p class="clause">Kiracı, işbu tahliye taahhüdü ile, Kira Sözleşmesi uyarınca kiralamış olduğumuz Mecur’u, hiçbir ihtar, ihbar, bildirim, mahkeme kararı vs. başkaca herhangi bir hukuki işleme gerek kalmaksızın, Tahliye Tarihi’nde teslim aldığı şekli ile tahliye ve teslim edeceğini, kendi serbest iradesi ile gayrikabili rücu beyan, kabul ve taahhüt eder.</p>
+
+        <p class="clause">Kiracı, yukarıda belirtilen şart ve kapsamlardaki tahliye yükümlüğü gereği gibi yerine getirmediği takdirde;</p>
+
+        <p class="clause">&bull; Mecur’un Kiraya Veren tarafından cebri icra yoluyla cebren tahliye ettirileceğini ve bu halde bu hususla ilgili olarak sarf edilecek tüm masrafların ve bilcümle ferilerinin kiracı tarafından tazmin edileceğini,</p>
+        <p class="clause">&bull; TBK’nın kira akdi ile ilgili hükümlerini kabul ettiğimizi ve tahliyeyi geciktirmemiz halinde gecikmeden dolayı Kiraya Veren’in bu nedenle uğ-rayacağı zarar ve ziyanları herhangi bir ihtar, ihbar ve hukuki merasime gerek kalmadan derhal, nakden ve peşinen ödeyeceğimizi,</p>
+        <p class="clause">&bull; Yukarıda ifade edilenlerle sınırlı olmaksızın Kiraya Veren’in bu nedenle uğradığı tüm maddi, manevi, doğrudan, dolaylı, menfi, müsbet her türlü zarar ve ziyanını tazmin etmeyi, bu kapsamda her türlü yargılama gideri, avukatlık ücretini de ödemekle yükümlü olduğumuzu;</p>
+
+        <p class="clause">gayrikabili rücu kabul, beyan ve taahhüt ederiz.</p>
+
+        <p class="clause">İşbu Tahliye Taahhüdü, Kiracı ile Kiraya Veren arasındaki temel ilişkinin herhangi bir hususunun geçerliliğine veya icra edilebilirliğine ilişkin herhangi bir değişiklikten veya ilgili belgelerde yapılan tadillerden veya geçerlilikten etkilenmeyeceğini, gayrikabili rücu, kabul, beyan ve taahhüt ederiz.</p>
+
+        <p class="clause">İşbu Tahliye Taahhüdü, kanunlar iştilafı hükümlerine bakılmaksızın Türkiye Cumhuriyeti kanunlarına tabidir ve Türkiye Cumhuriyeti kanunlarına uygun olarak yorumlanacaktır. İşbu Tahliye Taahhüdü’nden kaynaklanan uyuşmazlıkların çözümünde İstanbul (Anadolu) mahkemeleri ve icra daireleri yetkilidir.</p>
+
+        <p class="clause">İşbu Tahliye Taahhüdü, Kira Sözleşmesi uyarınca tesis edilen kira ilişkisine istinaden düzenlenmiş olup, sonuçları bilinerek herhangi bir baskı altında kalmadan ve müzayaka halinde olmadan, serbest irademizle …………${esc(commitDate)}………… tarihinde imzalanmıştır.</p>
+
+        <p class="clause">İşbu Tahliye Taahhüdü tek asıl nüsha ve (İki) sayfa halinde düzenlenerek Kiraya Veren’e teslim edilmiştir.</p>
 
         <div class="taahhut-box">
-          <div class="field-row"><span class="field-label">Taahhüt Tarihi</span><span>${esc(
-            contract.evictionCommitmentDate
-              ? formatDate(contract.evictionCommitmentDate)
-              : "—",
-          )}</span></div>
-          <div class="field-row"><span class="field-label">Tahliye Tarihi</span><span>${esc(
-            contract.evictionDate ? formatDate(contract.evictionDate) : "—",
-          )}</span></div>
+          <div class="field-row"><span class="field-label">Taahhüt Tarihi</span><span>${esc(commitDate)}</span></div>
+          <div class="field-row"><span class="field-label">Tahliye Tarihi</span><span>${esc(evictDate)}</span></div>
           <div class="field-row"><span class="field-label">Kiracı</span><span>${esc(tenant?.name ?? "—")}</span></div>
-          <div class="field-row"><span class="field-label">Kiralanan</span><span>${esc(property?.name ?? "—")}</span></div>
+          <div class="field-row"><span class="field-label">Kiraya Veren</span><span>${esc(evictionSigner)}</span></div>
         </div>
       </div>
       <div class="signatures">
         <div class="signature"><div class="line"></div><div class="name">Kiracı<span>${esc(tenant?.name ?? "—")}</span></div></div>
+        <div class="signature"><div class="line"></div><div class="name">Kiraya Veren<span>${esc(evictionSigner)}</span></div></div>
       </div>
       <div class="page-foot">Sayfa ${TOTAL_PAGES} / ${TOTAL_PAGES}</div>
     </div>`
