@@ -1277,7 +1277,7 @@ function ContractFormDialog({
             </span>
           </label>
           {form.evictionCommitment && (
-            <Row>
+            <>
               <Field label="Taahhüt Tarihi" required>
                 <Input
                   type="date"
@@ -1288,7 +1288,7 @@ function ContractFormDialog({
               </Field>
               <Field
                 label="Tahliye Tarihi"
-                hint="taahhüt edilen boşaltma tarihi (opsiyonel)"
+                hint="boşaltma tarihi (opsiyonel)"
               >
                 <Input
                   type="date"
@@ -1297,7 +1297,7 @@ function ContractFormDialog({
                   className="rounded-none"
                 />
               </Field>
-            </Row>
+            </>
           )}
         </div>
 

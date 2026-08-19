@@ -144,8 +144,14 @@ export default function Panel() {
         (paidPerAccrual.get(c.accrualId.toString()) ?? 0) + c.amount,
       );
     });
+    // Kontrat başlangıç tarihlerini haritala — başlangıç öncesi tahakkukları hariç tut
+    const contractStartMap = new Map<string, number>();
+    (contracts ?? []).forEach((c) => {
+      contractStartMap.set(c._id.toString(), c.startDate);
+    });
     // Bekleyen kiralar: yalnızca vadesi geçmiş ve bu ay içinde vadesi gelen
     // tahakkuklar sayılır; vadesi ileriki aylara ait olanlar dahil edilmez.
+    // Kontrat başlangıç tarihinden önceki tahakkuklar da hariç tutulur.
     const now = new Date();
     const monthEnd = new Date(
       now.getFullYear(),
@@ -160,6 +166,9 @@ export default function Panel() {
       .filter((a) => (a.type ?? "rent") !== "deposit") // depozito tahakkuku kira alacağı değildir
       .reduce((sum, a) => {
         if (a.dueDate > monthEnd) return sum;
+        // Kontrat başlangıç tarihinden önceki tahakkukları hariç tut
+        const contractStart = contractStartMap.get(a.contractId.toString());
+        if (contractStart !== undefined && a.dueDate < contractStart) return sum;
         const paid = paidPerAccrual.get(a._id.toString()) ?? 0;
         return sum + Math.max(0, a.amount - paid);
       }, 0);
@@ -816,7 +825,13 @@ function PendingRentDetailList({
             remaining: Math.max(0, a.amount - paid),
           };
         })
-        .filter((r) => r.remaining > 0 && r.accrual.dueDate <= monthEnd)
+        .filter((r) => {
+          if (r.remaining <= 0 || r.accrual.dueDate > monthEnd) return false;
+          // Kontrat başlangıç tarihinden önceki tahakkukları hariç tut
+          const cs = contractMap.get(r.accrual.contractId.toString());
+          if (cs && r.accrual.dueDate < cs.startDate) return false;
+          return true;
+        })
         .sort((x, y) => x.accrual.dueDate - y.accrual.dueDate);
       const overdue = allRows.filter((r) => r.accrual.dueDate < nowMs);
       const dueThisMonth = allRows.filter((r) => r.accrual.dueDate >= nowMs);
