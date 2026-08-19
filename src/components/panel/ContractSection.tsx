@@ -2669,7 +2669,7 @@ function buildContractHtml(
     : "—";
   const evictDate = contract.evictionDate
     ? formatDate(contract.evictionDate)
-    : "—";
+    : "";
 
   const page4 = hasEviction
     ? `
@@ -2681,9 +2681,9 @@ function buildContractHtml(
 
         <p class="clause">Ben ${esc(tenant?.name ?? "—")}, Kiraya Veren ${esc(evictionSigner)} arasında imzalanan Kira Sözleşmesi uyarınca Mecur’da kiracı sıfatı ile bulunmaktayız.</p>
 
-        <p class="clause">Halen Kiracı olarak kullanmakta olduğumuz yukarıda açık adresi yazılı Mecur’u, ${esc(evictDate)} tarihinde, hiçbir ihtar ve ihbara veya başkaca herhangi bir hukuki işleme gerek kalmaksızın kayıtsız ve şartsız olarak, 6098 sayılı Türk Borçlar Kanunu (\"TBK\")’nın 352/1 maddesi gereğince, tarafımıza teslim edilen Mecur’da bulunan dekorasyon ve demirbaşlar konutta bulunan tüm eşyalar kullanılabilir ve çalışır vaziyette tam ve sağlam olarak tahliye tarihimizde teslim ederek Kiraya Veren ${esc(evictionSigner)}’ya teslim edeceğimizi gayrikabili rücu kabul beyan ve taahhüt ederiz.</p>
+        <p class="clause">Halen Kiracı olarak kullanmakta olduğumuz yukarıda açık adresi yazılı Mecur’u, ${esc(evictDate) ? `${esc(evictDate)} tarihinde, ` : ''}hiçbir ihtar ve ihbara veya başkaca herhangi bir hukuki işleme gerek kalmaksızın kayıtsız ve şartsız olarak, 6098 sayılı Türk Borçlar Kanunu (\"TBK\")’nın 352/1 maddesi gereğince, tarafımıza teslim edilen Mecur’da bulunan dekorasyon ve demirbaşlar konutta bulunan tüm eşyalar kullanılabilir ve çalışır vaziyette tam ve sağlam olarak tahliye tarihimizde teslim ederek Kiraya Veren ${esc(evictionSigner)}’ya teslim edeceğimizi gayrikabili rücu kabul beyan ve taahhüt ederiz.</p>
 
-        <p class="clause">Kiracı, işbu tahliye taahhüdü ile, Kira Sözleşmesi uyarınca kiralamış olduğumuz Mecur’u, hiçbir ihtar, ihbar, bildirim, mahkeme kararı vs. başkaca herhangi bir hukuki işleme gerek kalmaksızın, ${esc(evictDate)} tarihinde teslim aldığı şekli ile tahliye ve teslim edeceğini, kendi serbest iradesi ile gayrikabili rücu beyan, kabul ve taahhüt eder.</p>
+        <p class="clause">Kiracı, işbu tahliye taahhüdü ile, Kira Sözleşmesi uyarınca kiralamış olduğumuz Mecur’u, hiçbir ihtar, ihbar, bildirim, mahkeme kararı vs. başkaca herhangi bir hukuki işleme gerek kalmaksızın, ${esc(evictDate) ? `${esc(evictDate)} tarihinde ` : ''}teslim aldığı şekli ile tahliye ve teslim edeceğini, kendi serbest iradesi ile gayrikabili rücu beyan, kabul ve taahhüt eder.</p>
 
         <p class="clause">Kiracı, yukarıda belirtilen şart ve kapsamlardaki tahliye yükümlüğü gereği gibi yerine getirmediği takdirde;</p>
 
@@ -2703,7 +2703,7 @@ function buildContractHtml(
 
         <div class="taahhut-box">
           <div class="field-row"><span class="field-label">Taahhüt Tarihi</span><span>${esc(commitDate)}</span></div>
-          <div class="field-row"><span class="field-label">Tahliye Tarihi</span><span>${esc(evictDate)}</span></div>
+          ${evictDate ? `<div class="field-row"><span class="field-label">Tahliye Tarihi</span><span>${esc(evictDate)}</span></div>` : ""}
           <div class="field-row"><span class="field-label">Kiracı</span><span>${esc(tenant?.name ?? "—")}</span></div>
           <div class="field-row"><span class="field-label">Kiraya Veren</span><span>${esc(evictionSigner)}</span></div>
         </div>
@@ -2712,7 +2712,6 @@ function buildContractHtml(
         <div class="signature"><div class="line"></div><div class="name">Kiracı<span>${esc(tenant?.name ?? "—")}</span></div></div>
         <div class="signature"><div class="line"></div><div class="name">Kiraya Veren<span>${esc(evictionSigner)}</span></div></div>
       </div>
-      <div class="page-foot">Sayfa ${TOTAL_PAGES} / ${TOTAL_PAGES}</div>
     </div>`
     : "";
 
