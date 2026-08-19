@@ -786,10 +786,7 @@ function ContractFormDialog({
         setError("Tahliye taahhütnamesi için taahhüt tarihi zorunludur.");
         return;
       }
-      if (form.evictionDate === "") {
-        setError("Tahliye taahhütnamesi için tahliye tarihi zorunludur.");
-        return;
-      }
+
       if (form.evictionCommitmentDate === form.startDate) {
         setError("Taahhüt tarihi, kontrat (başlangıç) tarihi ile aynı olamaz.");
         return;
@@ -1286,8 +1283,7 @@ function ContractFormDialog({
               </Field>
               <Field
                 label="Tahliye Tarihi"
-                required
-                hint="taahhüt edilen boşaltma tarihi"
+                hint="taahhüt edilen boşaltma tarihi (opsiyonel)"
               >
                 <Input
                   type="date"
