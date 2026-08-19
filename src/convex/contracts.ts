@@ -50,6 +50,7 @@ const contractArgs = {
   evictionCommitmentDate: v.optional(v.number()),
   evictionDate: v.optional(v.number()),
   fixtures: v.optional(v.array(fixtureValidator)),
+  rentRecipient: v.optional(v.union(v.literal("owner"), v.literal("proxy"))),
   notes: v.optional(v.string()),
   status: v.optional(contractStatusValidator),
 };

@@ -25,6 +25,8 @@ export const proxyValidator = v.union(
     name: v.string(),
     tcNo: v.string(),
     phone: v.string(),
+    bankName: v.optional(v.string()),
+    iban: v.optional(v.string()),
   }),
 );
 export type Proxy = Infer<typeof proxyValidator>;
@@ -177,8 +179,10 @@ const schema = defineSchema(
       iban: v.string(), // IBAN Numarası
       proxy: proxyValidator, // Vekil (nullable)
       isCompany: v.optional(v.boolean()), // şirket mi?
+      isForeign: v.optional(v.boolean()), // yabancı uyruklu mu?
       taxOffice: v.optional(v.string()), // vergi dairesi
       taxNumber: v.optional(v.string()), // vergi numarası
+      foreignId: v.optional(v.string()), // yabancı kimlik no / vergi no (yabancı uyruklu)
       signatoryName: v.optional(v.string()), // imza yetkilisi adı soyadı
       signatoryTcNo: v.optional(v.string()), // imza yetkilisi TC
       createdBy: v.optional(v.id("users")),
@@ -224,6 +228,7 @@ const schema = defineSchema(
       evictionCommitmentDate: v.optional(v.number()), // Taahhüt tarihi (ms)
       evictionDate: v.optional(v.number()), // Tahliye tarihi (ms)
       fixtures: v.optional(v.array(fixtureValidator)), // Kontrat bazlı demirbaşlar
+      rentRecipient: v.optional(v.union(v.literal("owner"), v.literal("proxy"))), // kira kime yatacak: malik / vekil
       notes: v.optional(v.string()),
       signedContractStorageId: v.optional(v.id("_storage")), // İmzalı kontrat
       status: v.optional(contractStatusValidator), // aktif / sona erdi

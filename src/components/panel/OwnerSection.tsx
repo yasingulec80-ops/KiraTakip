@@ -36,8 +36,10 @@ type Owner = Doc<"owners">;
 
 interface OwnerFormState {
   isCompany: boolean;
+  isForeign: boolean;
   name: string;
   tcNo: string;
+  foreignId: string;
   taxOffice: string;
   taxNumber: string;
   signatoryName: string;
@@ -51,12 +53,16 @@ interface OwnerFormState {
   proxyName: string;
   proxyTcNo: string;
   proxyPhone: string;
+  proxyBankName: string;
+  proxyIban: string;
 }
 
 const emptyForm: OwnerFormState = {
   isCompany: false,
+  isForeign: false,
   name: "",
   tcNo: "",
+  foreignId: "",
   taxOffice: "",
   taxNumber: "",
   signatoryName: "",
@@ -70,12 +76,16 @@ const emptyForm: OwnerFormState = {
   proxyName: "",
   proxyTcNo: "",
   proxyPhone: "",
+  proxyBankName: "",
+  proxyIban: "",
 };
 
 const formFromOwner = (o: Owner): OwnerFormState => ({
   isCompany: o.isCompany === true,
+  isForeign: o.isForeign === true,
   name: o.name,
   tcNo: o.tcNo ?? "",
+  foreignId: o.foreignId ?? "",
   taxOffice: o.taxOffice ?? "",
   taxNumber: o.taxNumber ?? "",
   signatoryName: o.signatoryName ?? "",
@@ -89,6 +99,8 @@ const formFromOwner = (o: Owner): OwnerFormState => ({
   proxyName: o.proxy?.name ?? "",
   proxyTcNo: o.proxy?.tcNo ?? "",
   proxyPhone: o.proxy?.phone ?? "",
+  proxyBankName: o.proxy?.bankName ?? "",
+  proxyIban: o.proxy?.iban ?? "",
 });
 
 const CSV_HEADERS = [
@@ -185,13 +197,15 @@ export function OwnerSection() {
   const handleSave = async (form: OwnerFormState) => {
     const payload = {
       name: form.name.trim(),
-      tcNo: form.isCompany ? undefined : form.tcNo.trim(),
+      tcNo: form.isCompany || form.isForeign ? undefined : form.tcNo.trim(),
       phone: form.phone.trim(),
       address: form.address.trim(),
       email: form.email.trim(),
       bankName: form.bankName.trim(),
       iban: form.iban.trim(),
       isCompany: form.isCompany,
+      isForeign: form.isForeign,
+      foreignId: form.isForeign ? form.foreignId.trim() : undefined,
       taxOffice: form.isCompany ? form.taxOffice.trim() : undefined,
       taxNumber: form.isCompany ? form.taxNumber.trim() : undefined,
       signatoryName: form.isCompany ? form.signatoryName.trim() : undefined,
@@ -201,6 +215,8 @@ export function OwnerSection() {
             name: form.proxyName.trim(),
             tcNo: form.proxyTcNo.trim(),
             phone: form.proxyPhone.trim(),
+            bankName: form.proxyBankName.trim() || undefined,
+            iban: form.proxyIban.trim() || undefined,
           }
         : null,
     };
@@ -308,9 +324,11 @@ export function OwnerSection() {
                       </div>
                     </TableCell>
                     <TableCell className="font-mono text-[13px]">
-                      {o.isCompany
-                        ? (o.taxNumber || o.tcNo || "—")
-                        : (o.tcNo || "—")}
+                      {o.isForeign
+                        ? (o.foreignId || o.tcNo || "—")
+                        : o.isCompany
+                          ? (o.taxNumber || o.tcNo || "—")
+                          : (o.tcNo || "—")}
                     </TableCell>
                     <TableCell className="text-sm">{o.phone || "—"}</TableCell>
                     <TableCell className="max-w-44 truncate text-sm text-muted-foreground">
@@ -434,6 +452,11 @@ function OwnerFormDialog({
         setError("Vergi numarası zorunludur.");
         return;
       }
+    } else if (form.isForeign) {
+      if (form.foreignId.trim() === "") {
+        setError("Yabancı Kimlik No / Vergi No zorunludur.");
+        return;
+      }
     } else if (form.tcNo.trim() === "") {
       setError("TC kimlik numarası zorunludur.");
       return;
@@ -444,7 +467,7 @@ function OwnerFormDialog({
         form.proxyTcNo.trim() === "" ||
         form.proxyPhone.trim() === "")
     ) {
-      setError("Vekil için adı soyadı, TC kimlik ve telefon zorunludur.");
+      setError("Vekil için adı soyadı, kimlik numarası ve telefon zorunludur.");
       return;
     }
     onSave(form);
@@ -484,18 +507,28 @@ function OwnerFormDialog({
           </p>
         )}
 
-        {/* Şirket tiki — seçilirse şirket bilgileri açılır */}
-        <div className="flex items-center gap-2.5">
-          <Checkbox
-            checked={form.isCompany}
-            onCheckedChange={(checked) => set("isCompany", checked === true)}
-          />
-          <span className="text-sm font-medium">
-            Malik bir şirket
-          </span>
-          <span className="text-xs text-muted-foreground">
-            Şirket ünvanı ve vergi bilgileriyle kaydedilir
-          </span>
+        {/* Şirket / Yabancı Uyruklu tiki */}
+        <div className="flex flex-wrap items-center gap-4">
+          <label className="flex items-center gap-2">
+            <Checkbox
+              checked={form.isCompany}
+              onCheckedChange={(checked) => {
+                set("isCompany", checked === true);
+                if (checked) set("isForeign", false);
+              }}
+            />
+            <span className="text-sm font-medium">Şirket</span>
+          </label>
+          <label className="flex items-center gap-2">
+            <Checkbox
+              checked={form.isForeign}
+              onCheckedChange={(checked) => {
+                set("isForeign", checked === true);
+                if (checked) set("isCompany", false);
+              }}
+            />
+            <span className="text-sm font-medium">Yabancı Uyruklu</span>
+          </label>
         </div>
 
         {form.isCompany ? (
@@ -563,11 +596,11 @@ function OwnerFormDialog({
                 className="rounded-none"
               />
             </Field>
-            <Field label="TC Kimlik Numarası" required>
+            <Field label={form.isForeign ? "Yabancı Kimlik No / Vergi No" : "TC Kimlik Numarası"} required>
               <Input
-                value={form.tcNo}
-                onChange={(e) => set("tcNo", e.target.value)}
-                placeholder="11 haneli TC no"
+                value={form.isForeign ? form.foreignId : form.tcNo}
+                onChange={(e) => form.isForeign ? set("foreignId", e.target.value) : set("tcNo", e.target.value)}
+                placeholder={form.isForeign ? "Yabancı kimlik veya vergi numarası" : "11 haneli TC no"}
                 className="rounded-none"
               />
             </Field>
@@ -664,6 +697,24 @@ function OwnerFormDialog({
                   className="rounded-none"
                 />
               </Field>
+              <Row>
+                <Field label="Vekil Banka Adı">
+                  <Input
+                    value={form.proxyBankName}
+                    onChange={(e) => set("proxyBankName", e.target.value)}
+                    placeholder="örn. Ziraat Bankası"
+                    className="rounded-none"
+                  />
+                </Field>
+                <Field label="Vekil IBAN" hint="TR…">
+                  <Input
+                    value={form.proxyIban}
+                    onChange={(e) => set("proxyIban", e.target.value)}
+                    placeholder="TR00 0000 0000 0000 0000 0000 00"
+                    className="rounded-none"
+                  />
+                </Field>
+              </Row>
             </div>
           )}
         </div>
@@ -727,8 +778,11 @@ function OwnerDetailDialog({
               />
             </>
           )}
-          {!owner.isCompany && (
+          {!owner.isCompany && !owner.isForeign && (
             <DetailRow label="TC Kimlik" value={owner.tcNo} mono />
+          )}
+          {!owner.isCompany && owner.isForeign && (
+            <DetailRow label="Yabancı Kimlik / Vergi No" value={owner.foreignId || owner.tcNo || "—"} mono />
           )}
           <DetailRow label="Telefon" value={owner.phone} />
           <DetailRow label="Adres" value={owner.address} />
@@ -747,6 +801,11 @@ function OwnerDetailDialog({
                   <div className="text-xs text-muted-foreground">
                     {owner.proxy.phone}
                   </div>
+                  {owner.proxy.iban && (
+                    <div className="text-xs text-muted-foreground">
+                      {owner.proxy.bankName ? `${owner.proxy.bankName} · ` : ""}{owner.proxy.iban}
+                    </div>
+                  )}
                 </div>
               ) : undefined
             }

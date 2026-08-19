@@ -97,6 +97,7 @@ interface ContractFormState {
   evictionCommitment: boolean;
   evictionCommitmentDate: string;
   evictionDate: string;
+  rentRecipient: "owner" | "proxy";
   fixtures: FixtureDraft[];
   notes: string;
 }
@@ -124,6 +125,7 @@ const emptyForm: ContractFormState = {
   evictionCommitment: false,
   evictionCommitmentDate: "",
   evictionDate: "",
+  rentRecipient: "owner",
   fixtures: [],
   notes: "",
 };
@@ -154,6 +156,7 @@ const formFromContract = (c: Contract): ContractFormState => ({
     ? dateToInput(c.evictionCommitmentDate)
     : "",
   evictionDate: c.evictionDate ? dateToInput(c.evictionDate) : "",
+  rentRecipient: c.rentRecipient ?? "owner",
   fixtures: (c.fixtures ?? []).map((f) => ({
     name: f.name,
     quantity: String(f.quantity),

@@ -21,8 +21,10 @@ const ownerArgs = {
   iban: v.string(),
   proxy: proxyValidator,
   isCompany: v.optional(v.boolean()),
+  isForeign: v.optional(v.boolean()),
   taxOffice: v.optional(v.string()),
   taxNumber: v.optional(v.string()),
+  foreignId: v.optional(v.string()),
   signatoryName: v.optional(v.string()),
   signatoryTcNo: v.optional(v.string()),
 };
@@ -47,8 +49,10 @@ export const create = mutation({
       tcNo: args.tcNo ?? "",
       proxy: args.proxy ?? null,
       isCompany: args.isCompany ?? false,
+      isForeign: args.isForeign ?? false,
       taxOffice: args.taxOffice,
       taxNumber: args.taxNumber,
+      foreignId: args.foreignId,
       signatoryName: args.signatoryName,
       signatoryTcNo: args.signatoryTcNo,
       createdBy: user._id,
@@ -82,6 +86,13 @@ export const update = mutation({
       patch.taxNumber = null;
       patch.signatoryName = null;
       patch.signatoryTcNo = null;
+    }
+
+    // Yabancı uyruklu → TC No temizle; TC uyruklu → foreignId temizle
+    if (data.isForeign === true) {
+      patch.tcNo = null;
+    } else if (data.isForeign === false) {
+      patch.foreignId = null;
     }
 
     await ctx.db.patch(id, patch as any);
