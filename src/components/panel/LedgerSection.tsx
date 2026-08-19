@@ -379,6 +379,7 @@ export function LedgerSection() {
                   <TableHead>Tür</TableHead>
                   <TableHead className="min-w-44">Kişi</TableHead>
                   <TableHead className="text-right">Vekil Borç</TableHead>
+                  <TableHead className="text-right">Vekil Alacak</TableHead>
                   <TableHead className="text-right">Borç</TableHead>
                   <TableHead className="text-right">Alacak</TableHead>
                   <TableHead className="text-right">Bakiye</TableHead>
@@ -392,6 +393,10 @@ export function LedgerSection() {
                   const proxyDebt =
                     proxyTotals !== null
                       ? proxyTotals.collectedRent + proxyTotals.collectedDeposit
+                      : 0;
+                  const proxyCredit =
+                    proxyTotals !== null
+                      ? proxyTotals.rentTransfer + proxyTotals.depositTransfer
                       : 0;
                   return (
                     <TableRow
@@ -423,6 +428,15 @@ export function LedgerSection() {
                         {proxyDebt > 0 ? (
                           <span className="text-amber-700">
                             {formatCurrency(proxyDebt)}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right font-medium tabular-nums">
+                        {proxyCredit > 0 ? (
+                          <span className="text-emerald-700">
+                            {formatCurrency(proxyCredit)}
                           </span>
                         ) : (
                           <span className="text-muted-foreground">—</span>
