@@ -819,6 +819,9 @@ function CollectionFormDialog({
                 {contractAccruals.map((a) => (
                   <SelectItem key={a._id} value={a._id}>
                     {a.period} · {formatCurrency(a.amount)}
+                    {(a.type ?? "rent") === "deposit"
+                      ? " (Depozito)"
+                      : ""}
                   </SelectItem>
                 ))}
               </SelectContent>
