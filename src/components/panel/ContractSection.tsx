@@ -2702,8 +2702,8 @@ function buildContractHtml(
         <p class="clause">İşbu Tahliye Taahhüdü tek asıl nüsha ve (İki) sayfa halinde düzenlenerek Kiraya Veren’e teslim edilmiştir.</p>
 
         <div class="taahhut-box">
-          ${commitDate ? `<div class="field-row"><span class="field-label">Taahhüt Tarihi</span><span>${esc(commitDate)}</span></div>` : ""}
-          ${evictDate ? `<div class="field-row"><span class="field-label">Tahliye Tarihi</span><span>${esc(evictDate)}</span></div>` : ""}
+          <div class="field-row"><span class="field-label">Taahhüt Tarihi</span><span>${esc(commitDate)}</span></div>
+          <div class="field-row"><span class="field-label">Tahliye Tarihi</span><span>${esc(evictDate)}</span></div>
           <div class="field-row"><span class="field-label">Kiracı</span><span>${esc(tenant?.name ?? "—")}</span></div>
           <div class="field-row"><span class="field-label">Kiraya Veren</span><span>${esc(evictionSigner)}</span></div>
         </div>
