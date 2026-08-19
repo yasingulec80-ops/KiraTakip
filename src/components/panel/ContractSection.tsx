@@ -724,6 +724,11 @@ function ContractFormDialog({
       propertyId: value,
       // Malik boşsa gayrimenkulün malikiyle otomatik doldur.
       ownerId: f.ownerId === "" && property?.ownerId ? property.ownerId.toString() : f.ownerId,
+      // Demirbaşlar gayrimenkul kaydından otomatik doldur (yalnızca ilk seçimde)
+      fixtures:
+        f.fixtures.length === 0 && property?.fixtures
+          ? property.fixtures.map((fx) => ({ name: fx.name, quantity: String(fx.quantity) }))
+          : f.fixtures,
     }));
   };
 
@@ -2674,11 +2679,11 @@ function buildContractHtml(
           <h1>TAHLİYE TAAHHÜTNAMESİ</h1>
         </div>
 
-        <p class="clause">Ben …………${esc(tenant?.name ?? "—")}………… ile Kiraya Veren …………${esc(evictionSigner)}………… arasında imzalanan Kira Sözleşmesi uyarınca Mecur’da kiracı sıfatı ile bulunmaktayız.</p>
+        <p class="clause">Ben ${esc(tenant?.name ?? "—")}, Kiraya Veren ${esc(evictionSigner)} arasında imzalanan Kira Sözleşmesi uyarınca Mecur’da kiracı sıfatı ile bulunmaktayız.</p>
 
-        <p class="clause">Halen Kiracı olarak kullanmakta olduğumuz yukarıda açık adresi yazılı Mecur’u, yukarıda belirtilen tarihte, hiçbir ihtar ve ihbara veya başkaca herhangi bir hukuki işleme gerek kalmaksızın kayıtsız ve şartsız olarak, 6098 sayılı Türk Borçlar Kanunu (\"TBK\")’nın 352/1 maddesi gereğince, tarafımıza teslim edilen Mecur’da bulunan dekorasyon ve demirbaşlar konutta bulunan tüm eşyalar kullanılabilir ve çalışır vaziyette tam ve sağlam olarak Tahliye Tarihi’nde teslim ederek Kiraya Veren …………${esc(evictionSigner)}………… ’ya teslim edeceğimizi gayrikabili rücu kabul beyan ve taahhüt ederiz.</p>
+        <p class="clause">Halen Kiracı olarak kullanmakta olduğumuz yukarıda açık adresi yazılı Mecur’u, ${esc(evictDate)} tarihinde, hiçbir ihtar ve ihbara veya başkaca herhangi bir hukuki işleme gerek kalmaksızın kayıtsız ve şartsız olarak, 6098 sayılı Türk Borçlar Kanunu (\"TBK\")’nın 352/1 maddesi gereğince, tarafımıza teslim edilen Mecur’da bulunan dekorasyon ve demirbaşlar konutta bulunan tüm eşyalar kullanılabilir ve çalışır vaziyette tam ve sağlam olarak tahliye tarihimizde teslim ederek Kiraya Veren ${esc(evictionSigner)}’ya teslim edeceğimizi gayrikabili rücu kabul beyan ve taahhüt ederiz.</p>
 
-        <p class="clause">Kiracı, işbu tahliye taahhüdü ile, Kira Sözleşmesi uyarınca kiralamış olduğumuz Mecur’u, hiçbir ihtar, ihbar, bildirim, mahkeme kararı vs. başkaca herhangi bir hukuki işleme gerek kalmaksızın, Tahliye Tarihi’nde teslim aldığı şekli ile tahliye ve teslim edeceğini, kendi serbest iradesi ile gayrikabili rücu beyan, kabul ve taahhüt eder.</p>
+        <p class="clause">Kiracı, işbu tahliye taahhüdü ile, Kira Sözleşmesi uyarınca kiralamış olduğumuz Mecur’u, hiçbir ihtar, ihbar, bildirim, mahkeme kararı vs. başkaca herhangi bir hukuki işleme gerek kalmaksızın, ${esc(evictDate)} tarihinde teslim aldığı şekli ile tahliye ve teslim edeceğini, kendi serbest iradesi ile gayrikabili rücu beyan, kabul ve taahhüt eder.</p>
 
         <p class="clause">Kiracı, yukarıda belirtilen şart ve kapsamlardaki tahliye yükümlüğü gereği gibi yerine getirmediği takdirde;</p>
 
@@ -2692,7 +2697,7 @@ function buildContractHtml(
 
         <p class="clause">İşbu Tahliye Taahhüdü, kanunlar iştilafı hükümlerine bakılmaksızın Türkiye Cumhuriyeti kanunlarına tabidir ve Türkiye Cumhuriyeti kanunlarına uygun olarak yorumlanacaktır. İşbu Tahliye Taahhüdü’nden kaynaklanan uyuşmazlıkların çözümünde İstanbul (Anadolu) mahkemeleri ve icra daireleri yetkilidir.</p>
 
-        <p class="clause">İşbu Tahliye Taahhüdü, Kira Sözleşmesi uyarınca tesis edilen kira ilişkisine istinaden düzenlenmiş olup, sonuçları bilinerek herhangi bir baskı altında kalmadan ve müzayaka halinde olmadan, serbest irademizle …………${esc(commitDate)}………… tarihinde imzalanmıştır.</p>
+        <p class="clause">İşbu Tahliye Taahhüdü, Kira Sözleşmesi uyarınca tesis edilen kira ilişkisine istinaden düzenlenmiş olup, sonuçları bilinerek herhangi bir baskı altında kalmadan ve müzayaka halinde olmadan, serbest irademizle ${esc(commitDate)} tarihinde imzalanmıştır.</p>
 
         <p class="clause">İşbu Tahliye Taahhüdü tek asıl nüsha ve (İki) sayfa halinde düzenlenerek Kiraya Veren’e teslim edilmiştir.</p>
 
