@@ -99,7 +99,6 @@ const SUMMARY_HEADERS = [
   "Kişi",
   "Tahsil Edilen Kira",
   "Tahsil Edilen Depozito",
-  "Vekil Borç",
   "Kira Devri",
   "Depozito Devri",
   "Borç",
@@ -241,7 +240,6 @@ export function LedgerSection() {
       a.name,
       t.collectedRent,
       t.collectedDeposit,
-      a.personType === "proxy" ? t.collectedRent + t.collectedDeposit : 0,
       t.rentTransfer,
       t.depositTransfer,
       a.balance < 0 ? -a.balance : 0,
@@ -378,7 +376,6 @@ export function LedgerSection() {
                 <TableRow className="hover:bg-transparent">
                   <TableHead>Tür</TableHead>
                   <TableHead className="min-w-44">Kişi</TableHead>
-                  <TableHead className="text-right">Vekil Borç</TableHead>
                   <TableHead className="text-right">Vekil Alacak</TableHead>
                   <TableHead className="text-right">Borç</TableHead>
                   <TableHead className="text-right">Alacak</TableHead>
@@ -390,10 +387,6 @@ export function LedgerSection() {
                 {accounts.map((a) => {
                   const proxyTotals =
                     a.personType === "proxy" ? summaryTotalsOf(a) : null;
-                  const proxyDebt =
-                    proxyTotals !== null
-                      ? proxyTotals.collectedRent + proxyTotals.collectedDeposit
-                      : 0;
                   const proxyCredit =
                     proxyTotals !== null
                       ? proxyTotals.rentTransfer + proxyTotals.depositTransfer
@@ -423,15 +416,6 @@ export function LedgerSection() {
                         <div className="text-xs text-muted-foreground">
                           {a.subtitle}
                         </div>
-                      </TableCell>
-                      <TableCell className="text-right font-medium tabular-nums">
-                        {proxyDebt > 0 ? (
-                          <span className="text-amber-700">
-                            {formatCurrency(proxyDebt)}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
                       </TableCell>
                       <TableCell className="text-right font-medium tabular-nums">
                         {proxyCredit > 0 ? (
@@ -519,7 +503,7 @@ export function LedgerSection() {
               dökümü açılır
             </span>
             <span>
-              Vekil Borç = tahsil edilen kira + depozito · pozitif bakiye
+              Vekil Alacak = devredilen kira + depozito · pozitif bakiye
               alacak, negatif bakiye borç
             </span>
           </div>
@@ -763,12 +747,6 @@ function PersonDetailDialog({
                 <p className="eyebrow text-muted-foreground">Tahsil Depozito</p>
                 <p className="mt-1 font-display text-sm font-medium tabular-nums">
                   {formatCurrency(collectedDeposit.reduce((s, e) => s + Math.abs(e.amount), 0))}
-                </p>
-              </div>
-              <div className="bg-card p-3">
-                <p className="eyebrow text-amber-700">Vekil Borç</p>
-                <p className="mt-1 font-display text-sm font-medium tabular-nums text-amber-700">
-                  {formatCurrency(collectedRent.reduce((s, e) => s + Math.abs(e.amount), 0) + collectedDeposit.reduce((s, e) => s + Math.abs(e.amount), 0))}
                 </p>
               </div>
               <div className="bg-card p-3">
