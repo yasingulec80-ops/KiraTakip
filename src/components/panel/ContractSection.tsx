@@ -2666,7 +2666,7 @@ function buildContractHtml(
   const evictionSigner = owner?.proxy ? owner.proxy.name : (owner?.name ?? "—");
   const commitDate = contract.evictionCommitmentDate
     ? formatDate(contract.evictionCommitmentDate)
-    : "—";
+    : "";
   const evictDate = contract.evictionDate
     ? formatDate(contract.evictionDate)
     : "";
@@ -2697,12 +2697,12 @@ function buildContractHtml(
 
         <p class="clause">İşbu Tahliye Taahhüdü, kanunlar iştilafı hükümlerine bakılmaksızın Türkiye Cumhuriyeti kanunlarına tabidir ve Türkiye Cumhuriyeti kanunlarına uygun olarak yorumlanacaktır. İşbu Tahliye Taahhüdü’nden kaynaklanan uyuşmazlıkların çözümünde İstanbul (Anadolu) mahkemeleri ve icra daireleri yetkilidir.</p>
 
-        <p class="clause">İşbu Tahliye Taahhüdü, Kira Sözleşmesi uyarınca tesis edilen kira ilişkisine istinaden düzenlenmiş olup, sonuçları bilinerek herhangi bir baskı altında kalmadan ve müzayaka halinde olmadan, serbest irademizle ${esc(commitDate)} tarihinde imzalanmıştır.</p>
+        <p class="clause">İşbu Tahliye Taahhüdü, Kira Sözleşmesi uyarınca tesis edilen kira ilişkisine istinaden düzenlenmiş olup, sonuçları bilinerek herhangi bir baskı altında kalmadan ve müzayaka halinde olmadan, serbest irademizle ${esc(commitDate) ? `${esc(commitDate)} tarihinde ` : ''}imzalanmıştır.</p>
 
         <p class="clause">İşbu Tahliye Taahhüdü tek asıl nüsha ve (İki) sayfa halinde düzenlenerek Kiraya Veren’e teslim edilmiştir.</p>
 
         <div class="taahhut-box">
-          <div class="field-row"><span class="field-label">Taahhüt Tarihi</span><span>${esc(commitDate)}</span></div>
+          ${commitDate ? `<div class="field-row"><span class="field-label">Taahhüt Tarihi</span><span>${esc(commitDate)}</span></div>` : ""}
           ${evictDate ? `<div class="field-row"><span class="field-label">Tahliye Tarihi</span><span>${esc(evictDate)}</span></div>` : ""}
           <div class="field-row"><span class="field-label">Kiracı</span><span>${esc(tenant?.name ?? "—")}</span></div>
           <div class="field-row"><span class="field-label">Kiraya Veren</span><span>${esc(evictionSigner)}</span></div>
