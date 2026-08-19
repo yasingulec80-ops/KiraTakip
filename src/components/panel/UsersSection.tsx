@@ -237,7 +237,7 @@ export function UsersSection() {
                   const isSeededAdmin = u.username === "Admin";
                   const isSelf = me?._id === u._id;
                   return (
-                    <TableRow key={u._id} className="align-middle">
+                    <TableRow key={u._id} className="align-middle cursor-pointer" onDoubleClick={() => { setEditing(u); }}>
                       <TableCell>
                         <div className="flex items-center gap-2 font-medium">
                           {u.username}

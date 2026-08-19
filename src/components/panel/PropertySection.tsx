@@ -373,7 +373,7 @@ export function PropertySection() {
                     ? ownerMap.get(p.ownerId.toString())
                     : undefined;
                   return (
-                    <TableRow key={p._id} className="align-middle">
+                    <TableRow key={p._id} className="align-middle cursor-pointer" onDoubleClick={() => { setEditing(p); setFormOpen(true); }}>
                       <TableCell>
                         <div className="font-medium">{p.name}</div>
                         <div className="text-xs text-muted-foreground">

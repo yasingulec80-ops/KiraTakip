@@ -497,7 +497,7 @@ export function ContractSection() {
                   const tenant = tenantMap.get(c.tenantId.toString());
                   const progress = accrualCountByContract.get(c._id.toString());
                   return (
-                    <TableRow key={c._id} className="align-middle">
+                    <TableRow key={c._id} className="align-middle cursor-pointer" onDoubleClick={() => { setEditing(c); setFormOpen(true); }}>
                       <TableCell>
                         <div className="font-medium">{property?.name ?? "—"}</div>
                         <div className="max-w-44 truncate text-xs text-muted-foreground">

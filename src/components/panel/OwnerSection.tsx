@@ -309,7 +309,7 @@ export function OwnerSection() {
               </TableHeader>
               <TableBody>
                 {filtered.map((o) => (
-                  <TableRow key={o._id} className="align-middle">
+                  <TableRow key={o._id} className="align-middle cursor-pointer" onDoubleClick={() => { setEditing(o); setFormOpen(true); }}>
                     <TableCell>
                       <div className="flex items-center gap-2 font-medium">
                         {o.name}

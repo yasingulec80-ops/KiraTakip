@@ -287,7 +287,7 @@ export function TenantSection() {
               </TableHeader>
               <TableBody>
                 {filtered.map((t) => (
-                  <TableRow key={t._id} className="align-middle">
+                  <TableRow key={t._id} className="align-middle cursor-pointer" onDoubleClick={() => { setEditing(t); setFormOpen(true); }}>
                     <TableCell>
                       <div className="flex items-center gap-2 font-medium">
                         {t.name}
