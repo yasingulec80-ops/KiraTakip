@@ -38,12 +38,33 @@ const DETAIL_HEADERS = [
   "Kontrat",
   "Tahsil Edilen Kira",
   "Tahsil Edilen Depozito",
-  "Vekil Borç",
   "Kira Devri",
   "Depozito Devri",
   "Vekil Alacak",
   "Teslim Bekleyen",
 ];
+
+const PROPERTY_HEADERS = [
+  "Gayrimenkul",
+  "Vekil",
+  "Tahsil Edilen Kira",
+  "Tahsil Edilen Depozito",
+  "Kira Devri",
+  "Depozito Devri",
+  "Vekil Alacak",
+  "Teslim Bekleyen",
+];
+
+interface PropertyRow {
+  propertyId: string;
+  propertyName: string;
+  vekilName: string;
+  collectedRent: number;
+  collectedDeposit: number;
+  rentTransfer: number;
+  depositTransfer: number;
+  vekilAlacak: number;
+}
 
 interface SummaryRow {
   ownerId: string;
@@ -82,6 +103,7 @@ export function VekilDevirReport() {
   const [search, setSearch] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  const [viewMode, setViewMode] = useState<"malik" | "property" | "contract">("malik");
 
   const devir = useMutation(api.ledgers.devir);
   const [deviring, setDeviring] = useState<{
@@ -368,6 +390,52 @@ export function VekilDevirReport() {
     summaryTotals.vekilAlacak,
   );
 
+  // Gayrimenkul bazında toplamlar — detailRows'ı propertyName'e göre gruplar.
+  const propertyRows = useMemo(() => {
+    const map = new Map<string, PropertyRow>();
+    for (const r of detailRows) {
+      let entry = map.get(r.propertyName);
+      if (!entry) {
+        entry = {
+          propertyId: r.propertyName,
+          propertyName: r.propertyName,
+          vekilName: r.vekilName,
+          collectedRent: 0,
+          collectedDeposit: 0,
+          rentTransfer: 0,
+          depositTransfer: 0,
+          vekilAlacak: 0,
+        };
+        map.set(r.propertyName, entry);
+      }
+      entry.collectedRent += r.collectedRent;
+      entry.collectedDeposit += r.collectedDeposit;
+      entry.rentTransfer += r.rentTransfer;
+      entry.depositTransfer += r.depositTransfer;
+      entry.vekilAlacak += r.vekilAlacak;
+    }
+    return [...map.values()].sort((a, b) =>
+      a.propertyName.localeCompare(b.propertyName, "tr"),
+    );
+  }, [detailRows]);
+
+  const propertyExportRows = propertyRows.map((r) => [
+    r.propertyName,
+    r.vekilName,
+    r.collectedRent,
+    r.collectedDeposit,
+    r.rentTransfer,
+    r.depositTransfer,
+    r.vekilAlacak,
+    remainingOf(
+      r.collectedRent,
+      r.collectedDeposit,
+      r.rentTransfer,
+      r.depositTransfer,
+      r.vekilAlacak,
+    ),
+  ]);
+
   const detailExportRows = detailRows.map((r) => [
     r.ownerName,
     r.vekilName,
@@ -375,7 +443,6 @@ export function VekilDevirReport() {
     r.contractLabel,
     r.collectedRent,
     r.collectedDeposit,
-    r.collectedRent + r.collectedDeposit,
     r.rentTransfer,
     r.depositTransfer,
     r.vekilAlacak,
@@ -389,17 +456,21 @@ export function VekilDevirReport() {
   ]);
 
   const exportCsv = () => {
-    downloadCsv("vekil-devir-raporu", DETAIL_HEADERS, detailExportRows);
+    if (viewMode === "property") {
+      downloadCsv("vekil-devir-gayrimenkul", PROPERTY_HEADERS, propertyExportRows);
+    } else {
+      downloadCsv("vekil-devir-raporu", DETAIL_HEADERS, detailExportRows);
+    }
     toast.success("Excel dökümü indirildi.");
   };
 
   const exportPdf = () => {
-    printReport(
-      "Vekil Devir Raporu",
-      "Vekil tahsilat ve devirlerinin kontrat bazında özeti",
-      DETAIL_HEADERS,
-      detailExportRows,
-    );
+    const headers = viewMode === "property" ? PROPERTY_HEADERS : DETAIL_HEADERS;
+    const rows = viewMode === "property" ? propertyExportRows : detailExportRows;
+    const subtitle = viewMode === "property"
+      ? "Vekil tahsilat ve devirlerinin gayrimenkul bazında özeti"
+      : "Vekil tahsilat ve devirlerinin kontrat bazında özeti";
+    printReport("Vekil Devir Raporu", subtitle, headers, rows);
     toast.success("PDF dökümü hazırlanıyor.");
   };
 
@@ -445,7 +516,29 @@ export function VekilDevirReport() {
         </Empty>
       ) : (
         <div className="space-y-6">
+          {/* Görünüm seçimi */}
+          <div className="flex items-center gap-1">
+            {[
+              { id: "malik" as const, label: "Malik Özeti" },
+              { id: "property" as const, label: "Gayrimenkul Bazında" },
+              { id: "contract" as const, label: "Kontrat Ayrıntısı" },
+            ].map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setViewMode(t.id)}
+                className={`rounded-none px-3 py-1.5 text-xs font-medium transition-colors ${
+                  viewMode === t.id
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-muted-foreground hover:bg-muted/80"
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
           {/* Malik özeti */}
+          {viewMode === "malik" && (
           <div className="border border-border bg-card">
             <div className="overflow-x-auto">
               <Table>
@@ -455,7 +548,6 @@ export function VekilDevirReport() {
                     <TableHead>Vekil</TableHead>
                     <TableHead className="text-right">Tahsil Edilen Kira</TableHead>
                     <TableHead className="text-right">Tahsil Edilen Depozito</TableHead>
-                    <TableHead className="text-right">Vekil Borç</TableHead>
                     <TableHead className="text-right">Kira Devri</TableHead>
                     <TableHead className="text-right">Depozito Devri</TableHead>
                     <TableHead className="text-right">Vekil Alacak</TableHead>
@@ -483,13 +575,6 @@ export function VekilDevirReport() {
                         <TableCell className="text-right tabular-nums">
                           {r.collectedDeposit > 0
                             ? formatCurrency(r.collectedDeposit)
-                            : "—"}
-                        </TableCell>
-                        <TableCell className="text-right font-medium tabular-nums">
-                          {r.collectedRent + r.collectedDeposit > 0
-                            ? formatCurrency(
-                                r.collectedRent + r.collectedDeposit,
-                              )
                             : "—"}
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
@@ -536,13 +621,7 @@ export function VekilDevirReport() {
                 <span className="font-medium text-foreground">
                   {formatCurrency(summaryTotals.collectedDeposit)}
                 </span>{" "}
-                · vekil borç{" "}
-                <span className="font-medium text-foreground">
-                  {formatCurrency(
-                    summaryTotals.collectedRent +
-                      summaryTotals.collectedDeposit,
-                  )}
-                </span>
+                
               </span>
               <span>
                 Devredilen kira{" "}
@@ -574,8 +653,74 @@ export function VekilDevirReport() {
               </span>
             </div>
           </div>
+          )}
+
+          {/* Gayrimenkul bazında */}
+          {viewMode === "property" && (
+          <div className="border border-border bg-card">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead>Gayrimenkul</TableHead>
+                    <TableHead>Vekil</TableHead>
+                    <TableHead className="text-right">Tahsil Edilen Kira</TableHead>
+                    <TableHead className="text-right">Tahsil Edilen Depozito</TableHead>
+                    <TableHead className="text-right">Kira Devri</TableHead>
+                    <TableHead className="text-right">Depozito Devri</TableHead>
+                    <TableHead className="text-right">Vekil Alacak</TableHead>
+                    <TableHead className="text-right">Teslim Bekleyen</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {propertyRows.map((r) => {
+                    const remaining = remainingOf(
+                      r.collectedRent,
+                      r.collectedDeposit,
+                      r.rentTransfer,
+                      r.depositTransfer,
+                      r.vekilAlacak,
+                    );
+                    return (
+                      <TableRow key={r.propertyId} className="align-middle">
+                        <TableCell className="font-medium">{r.propertyName}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{r.vekilName}</TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {r.collectedRent > 0 ? formatCurrency(r.collectedRent) : "—"}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {r.collectedDeposit > 0 ? formatCurrency(r.collectedDeposit) : "—"}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {r.rentTransfer > 0 ? formatCurrency(r.rentTransfer) : "—"}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {r.depositTransfer > 0 ? formatCurrency(r.depositTransfer) : "—"}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {r.vekilAlacak > 0 ? formatCurrency(r.vekilAlacak) : "—"}
+                        </TableCell>
+                        <TableCell className="text-right font-medium tabular-nums">
+                          {remaining > 0 ? (
+                            <span className="text-amber-700">{formatCurrency(remaining)}</span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+            <div className="border-t border-border px-4 py-3 text-xs text-muted-foreground">
+              {propertyRows.length} gayrimenkul gösteriliyor
+            </div>
+          </div>
+          )}
 
           {/* Kontrat ayrıntısı */}
+          {viewMode === "contract" && (
           <div>
             <div className="mb-3 flex items-center gap-4">
               <span className="eyebrow text-muted-foreground">
@@ -599,7 +744,6 @@ export function VekilDevirReport() {
                         <TableHead>Kontrat</TableHead>
                         <TableHead className="text-right">Tahsil Edilen Kira</TableHead>
                         <TableHead className="text-right">Tahsil Edilen Depozito</TableHead>
-                        <TableHead className="text-right">Vekil Borç</TableHead>
                         <TableHead className="text-right">Kira Devri</TableHead>
                         <TableHead className="text-right">Depozito Devri</TableHead>
                         <TableHead className="text-right">Vekil Alacak</TableHead>
@@ -631,13 +775,6 @@ export function VekilDevirReport() {
                             <TableCell className="text-right tabular-nums">
                               {r.collectedDeposit > 0
                                 ? formatCurrency(r.collectedDeposit)
-                                : "—"}
-                            </TableCell>
-                            <TableCell className="text-right font-medium tabular-nums">
-                              {r.collectedRent + r.collectedDeposit > 0
-                                ? formatCurrency(
-                                    r.collectedRent + r.collectedDeposit,
-                                  )
                                 : "—"}
                             </TableCell>
                             <TableCell className="text-right tabular-nums">
@@ -672,6 +809,7 @@ export function VekilDevirReport() {
               </div>
             )}
           </div>
+          )}
         </div>
       )}
       <DevirDialog
