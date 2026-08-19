@@ -126,12 +126,17 @@ export function AccrualSection() {
     () =>
       (accruals ?? [])
         .filter((a) => (a.type ?? "rent") !== "deposit")
+        // Kontrat başlangıç tarihinden önceki tahakkukları hariç tut
+        .filter((a) => {
+          const c = contractMap.get(a.contractId.toString());
+          return !c || a.dueDate >= c.startDate;
+        })
         .map((a) => ({
           ...a,
           paid: paidByAccrual.get(a._id.toString()) ?? 0,
           remaining: Math.max(0, a.amount - (paidByAccrual.get(a._id.toString()) ?? 0)),
         })),
-    [accruals, paidByAccrual],
+    [accruals, paidByAccrual, contractMap],
   );
 
   const filtered = useMemo(() => {

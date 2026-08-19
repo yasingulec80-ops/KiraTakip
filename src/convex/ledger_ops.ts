@@ -53,6 +53,8 @@ export const createAccrualWithLedger = async (
   amount?: number,
   type: "rent" | "deposit" = "rent",
 ) => {
+  // Kontrat başlangıç tarihinden önceki tahakkukları engelle
+  if (month.dueDate < contract.startDate) return null;
   const rent = amount ?? contract.rentAmount;
   const accrualId = await ctx.db.insert("accruals", {
     contractId: contract._id,
