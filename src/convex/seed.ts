@@ -63,6 +63,8 @@ export const seedDemoData = mutation({
         name: "Mehmet Kaya",
         tcNo: "98765432109",
         phone: "0533 444 55 66",
+        bankName: "İş Bankası",
+        iban: "TR45 0006 4000 0011 2345 6789 01",
       },
       createdBy: actor._id,
     });

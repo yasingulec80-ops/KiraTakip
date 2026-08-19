@@ -364,6 +364,7 @@ export function ContractSection() {
           name: f.name.trim(),
           quantity: parseNumber(f.quantity) ?? 1,
         })),
+      rentRecipient: form.rentRecipient !== "owner" ? form.rentRecipient : undefined,
       notes: form.notes.trim() || undefined,
     };
 
@@ -391,6 +392,7 @@ export function ContractSection() {
         evictionCommitment: payload.evictionCommitment,
         evictionCommitmentDate: payload.evictionCommitmentDate,
         evictionDate: payload.evictionDate,
+        rentRecipient: payload.rentRecipient,
         fixtures: payload.fixtures,
         notes: payload.notes,
       });
@@ -849,7 +851,12 @@ function ContractFormDialog({
           <Field label="Malik" required hint="otomatik doldurabilir">
             <Select
               value={form.ownerId}
-              onValueChange={(value) => set("ownerId", value)}
+              onValueChange={(value) => {
+                set("ownerId", value);
+                // Malik değiştiyse ve yeni malikin vekili yoksa kira alıcısını sıfırla
+                const newOwner = owners.find((o) => o._id.toString() === value);
+                if (!newOwner?.proxy) set("rentRecipient", "owner");
+              }}
             >
               <SelectTrigger className="rounded-none">
                 <SelectValue placeholder="Malik seçin" />
@@ -864,6 +871,25 @@ function ContractFormDialog({
             </Select>
           </Field>
         </Row>
+
+        {selectedOwner?.proxy && (
+          <Field label="Kira Ödemesi">
+            <RadioGroup
+              className="flex gap-6"
+              value={form.rentRecipient}
+              onValueChange={(value) => set("rentRecipient", value as "owner" | "proxy")}
+            >
+              <label className="flex items-center gap-2 text-sm font-medium">
+                <RadioGroupItem value="owner" />
+                Malik ({selectedOwner.name})
+              </label>
+              <label className="flex items-center gap-2 text-sm font-medium">
+                <RadioGroupItem value="proxy" />
+                Vekil ({selectedOwner.proxy.name})
+              </label>
+            </RadioGroup>
+          </Field>
+        )}
 
         <Field label="Kiracı" required>
           <Select
@@ -2301,6 +2327,7 @@ type ContractDocData = Pick<
   | "evictionCommitment"
   | "evictionCommitmentDate"
   | "evictionDate"
+  | "rentRecipient"
   | "fixtures"
   | "notes"
 >;
@@ -2458,7 +2485,9 @@ function buildContractHtml(
   const TOTAL_PAGES = hasEviction ? 4 : 3;
 
   /** Hususi şartlar — DB'den gelen maddeler, dinamik olarak işlenir */
-  const paymentPerson = owner?.proxy ? owner.proxy.name : owner?.name;
+  // kira kime yatacak: rentRecipient = "proxy" ise vekil, değilse malik
+  const rentRecipientIsProxy = contract.rentRecipient === "proxy" && !!owner?.proxy;
+  const paymentPerson = rentRecipientIsProxy ? owner!.proxy!.name : owner?.name;
   /** kira bedeli ve banka bilgisi maddeleri otomatik doldurulur */
   const processedSpecial = specialConditions.map((c) => {
     if (c.includes("contract.rentAmount")) {
@@ -2473,8 +2502,10 @@ function buildContractHtml(
     // depositMonths artık depositAmount içinde yer aldığı için ayrıca değiştirme
     // (çift "aylık kira bedeli karşılığı" çıkmasını önlemek için)
     if (c.includes("banka bilgileri otomatik olarak doldurulacaktır.")) {
+      const _iban = rentRecipientIsProxy ? (owner!.proxy!.iban ?? owner?.iban ?? "—") : (owner?.iban ?? "—");
+      const _bankName = rentRecipientIsProxy ? (owner!.proxy!.bankName ?? owner?.bankName ?? "—") : (owner?.bankName ?? "—");
       c = c.replace("banka bilgileri otomatik olarak doldurulacaktır.",
-        (paymentPerson ?? owner?.name ?? "—") + " adına " + (owner?.iban ?? "—") + " IBAN nolu " + (owner?.bankName ?? "—") + " hesabını kullanacaktır.");
+        (paymentPerson ?? owner?.name ?? "—") + " adına " + _iban + " IBAN nolu " + _bankName + " hesabını kullanacaktır.");
     }
     return c;
   }).filter(Boolean);
