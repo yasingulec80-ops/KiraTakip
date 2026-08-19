@@ -25,13 +25,16 @@ const addMonths = (ts: number, months: number): number => {
   return new Date(d.getFullYear(), d.getMonth() + months, 1).getTime();
 };
 
-/** Monthly accrual rows for the contract's full duration. */
+/** Monthly accrual rows for the contract's full duration.
+ *  Accruals with dueDate before the contract startDate are excluded. */
 export const contractMonths = (
   contract: { startDate: number; durationMonths: number },
 ): { period: string; dueDate: number }[] => {
   const months: { period: string; dueDate: number }[] = [];
   for (let i = 0; i < contract.durationMonths; i++) {
     const dueDate = addMonths(contract.startDate, i);
+    // Kontrat başlangıç tarihinden önceki tahakkukları atla
+    if (dueDate < contract.startDate) continue;
     months.push({ period: periodKey(dueDate), dueDate });
   }
   return months;
