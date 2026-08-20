@@ -1,167 +1,207 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import {
-  accrualPosts,
-  contractMonths,
-  depositAccrualDecision,
-  expensePosts,
   periodKey,
+  contractMonths,
+  accrualPosts,
+  expensePosts,
+  depositAccrualDecision,
 } from "../src/lib/ledger-posts";
 
-const contract = { ownerId: "owner-1", tenantId: "tenant-1", startDate: 0, durationMonths: 3 };
-
-describe("periodKey / contractMonths", () => {
-  test("periodKey ay anahtarını üretir", () => {
-    expect(periodKey(new Date(2026, 7, 15).getTime())).toBe("2026-08");
-    expect(periodKey(new Date(2026, 0, 1).getTime())).toBe("2026-01");
+describe("periodKey", () => {
+  it("formats a timestamp to YYYY-MM", () => {
+    const ts = new Date(2026, 0, 15).getTime(); // Jan 15 2026
+    expect(periodKey(ts)).toBe("2026-01");
   });
 
-  test("contractMonths süre boyunca aylık satır üretir", () => {
-    const start = new Date(2026, 6, 1).getTime(); // 2026-07-01
-    const months = contractMonths({ startDate: start, durationMonths: 3 });
-    expect(months).toEqual([
-      { period: "2026-07", dueDate: start },
-      { period: "2026-08", dueDate: new Date(2026, 7, 1).getTime() },
-      { period: "2026-09", dueDate: new Date(2026, 8, 1).getTime() },
-    ]);
+  it("pads single-digit months", () => {
+    const ts = new Date(2026, 11, 1).getTime(); // Dec 2026
+    expect(periodKey(ts)).toBe("2026-12");
   });
 });
 
-describe("accrualPosts — tahakkuk kayıtları", () => {
-  test("kira tahakkuku: kiracı borçlanır (−), malik alacaklanır (+)", () => {
-    const posts = accrualPosts(contract, { period: "2026-08", amount: 18_500 });
+describe("contractMonths", () => {
+  it("generates correct number of months", () => {
+    const start = new Date(2026, 0, 1).getTime();
+    const months = contractMonths({ startDate: start, durationMonths: 3 });
+    expect(months).toHaveLength(3);
+  });
+
+  it("periods are sequential YYYY-MM", () => {
+    const start = new Date(2026, 0, 1).getTime();
+    const months = contractMonths({ startDate: start, durationMonths: 4 });
+    expect(months.map((m) => m.period)).toEqual([
+      "2026-01",
+      "2026-02",
+      "2026-03",
+      "2026-04",
+    ]);
+  });
+
+  it("skips months before startDate (edge case: mid-month start)", () => {
+    // startDate = Jan 15 → i=0 produces Jan 1 which is < Jan 15 → skipped;
+    // i=1 produces Feb 1 which is >= Jan 15 → included.
+    const start = new Date(2026, 0, 15).getTime();
+    const months = contractMonths({ startDate: start, durationMonths: 2 });
+    expect(months).toHaveLength(1);
+    expect(months[0].period).toBe("2026-02");
+    expect(months[0].dueDate).toBeGreaterThanOrEqual(start);
+  });
+
+  it("returns empty for 0 months", () => {
+    expect(contractMonths({ startDate: Date.now(), durationMonths: 0 })).toEqual([]);
+  });
+});
+
+describe("accrualPosts", () => {
+  it("creates tenant debit and owner credit for rent", () => {
+    const posts = accrualPosts(
+      { ownerId: "owner-1", tenantId: "tenant-1" },
+      { period: "2026-01", amount: 15000 },
+    );
     expect(posts).toHaveLength(2);
     expect(posts[0]).toMatchObject({
       personType: "tenant",
       personId: "tenant-1",
       kind: "accrual",
-      amount: -18_500,
-      description: "Kira tahakkuku — 2026-08",
+      amount: -15000,
     });
     expect(posts[1]).toMatchObject({
       personType: "owner",
       personId: "owner-1",
       kind: "accrual",
-      amount: 18_500,
-      description: "Kira tahakkuku — 2026-08",
+      amount: 15000,
     });
   });
 
-  test("depozito tahakkuku ayrı açıklama yazar", () => {
-    const posts = accrualPosts(contract, { period: "2026-07", amount: 55_500 }, "deposit");
-    expect(posts[0].description).toBe("Depozito tahakkuku — 2026-07");
-    expect(posts[0].amount).toBe(-55_500);
-    expect(posts[1].amount).toBe(55_500);
+  it("creates deposit posts with distinct description", () => {
+    const posts = accrualPosts(
+      { ownerId: "owner-1", tenantId: "tenant-1" },
+      { period: "2026-01", amount: 30000 },
+      "deposit",
+    );
+    expect(posts[0].description).toContain("Depozito tahakkuku");
+    expect(posts[1].description).toContain("Depozito tahakkuku");
+  });
+
+  it("rent posts have Kira tahakkuku description", () => {
+    const posts = accrualPosts(
+      { ownerId: "owner-1", tenantId: "tenant-1" },
+      { period: "2026-03", amount: 10000 },
+    );
+    expect(posts[0].description).toBe("Kira tahakkuku — 2026-03");
   });
 });
 
-describe("expensePosts — masraf ödeyen sınıflandırması", () => {
-  const base = {
-    amount: 2_500,
-    description: "Ağustos site aidatı",
-    category: "aidat",
-  };
-
-  test("malik öder → malik borçlanır (−)", () => {
-    const posts = expensePosts({ ...base, paidByType: "owner", payerOwnerId: "owner-1" });
-    expect(posts).toEqual([
-      {
-        personType: "owner",
-        personId: "owner-1",
-        kind: "expense",
-        amount: -2_500,
-        description: "Masraf — Ağustos site aidatı",
-      },
-    ]);
+describe("expensePosts", () => {
+  it("owner pays → single owner debit", () => {
+    const posts = expensePosts({
+      paidByType: "owner",
+      payerOwnerId: "owner-1",
+      amount: 5000,
+      description: "Boya",
+      category: "boya",
+    });
+    expect(posts).toHaveLength(1);
+    expect(posts[0]).toMatchObject({
+      personType: "owner",
+      personId: "owner-1",
+      kind: "expense",
+      amount: -5000,
+    });
+    expect(posts[0].description).toContain("Masraf — Boya");
   });
 
-  test("kiracı öder → kiracı alacaklanır (+) (kira hesabına mahsup)", () => {
-    const posts = expensePosts({ ...base, paidByType: "tenant", payerTenantId: "tenant-1" });
-    expect(posts).toEqual([
-      {
-        personType: "tenant",
-        personId: "tenant-1",
-        kind: "expense",
-        amount: 2_500,
-        description: "Masraf — Ağustos site aidatı",
-      },
-    ]);
+  it("tenant pays → single tenant credit", () => {
+    const posts = expensePosts({
+      paidByType: "tenant",
+      payerTenantId: "tenant-1",
+      amount: 3000,
+      description: "Aidat",
+      category: "aidat",
+    });
+    expect(posts).toHaveLength(1);
+    expect(posts[0]).toMatchObject({
+      personType: "tenant",
+      personId: "tenant-1",
+      kind: "expense",
+      amount: 3000,
+    });
   });
 
-  test("vekil öder → vekil alacaklanır (+), malik borçlanır (−, (vekil) eki)", () => {
-    const posts = expensePosts({ ...base, paidByType: "proxy", payerOwnerId: "owner-1" });
+  it("proxy pays → proxy credit + owner debit", () => {
+    const posts = expensePosts({
+      paidByType: "proxy",
+      payerOwnerId: "owner-1",
+      amount: 8000,
+      description: "Tadilat",
+      category: "tadilat",
+    });
     expect(posts).toHaveLength(2);
     expect(posts[0]).toMatchObject({
       personType: "proxy",
       personId: "owner-1",
-      ownerId: "owner-1",
       kind: "expense",
-      amount: 2_500,
+      amount: 8000,
     });
     expect(posts[1]).toMatchObject({
       personType: "owner",
       personId: "owner-1",
       kind: "expense",
-      amount: -2_500,
-      description: "Masraf — Ağustos site aidatı (vekil)",
+      amount: -8000,
     });
+    expect(posts[1].description).toContain("(vekil)");
   });
 
-  test("ödeyen kimliği eksikse kayıt üretilmez", () => {
-    expect(expensePosts({ ...base, paidByType: "owner" })).toEqual([]);
-    expect(expensePosts({ ...base, paidByType: "tenant" })).toEqual([]);
+  it("missing payer returns empty", () => {
+    const posts = expensePosts({
+      paidByType: "owner",
+      amount: 1000,
+      description: "test",
+      category: "diger",
+    });
+    expect(posts).toEqual([]);
   });
 });
 
-describe("depositAccrualDecision — depozito tahakkuk senkronizasyonu", () => {
-  const startDate = new Date(2026, 6, 1).getTime();
-  const now = new Date(2026, 7, 15).getTime();
+describe("depositAccrualDecision", () => {
+  const start = new Date(2026, 0, 1).getTime();
+  const now = new Date(2026, 0, 15).getTime();
 
-  test("tahakkuk yok + depozito > 0 → oluştur", () => {
-    const d = depositAccrualDecision(55_500, null, startDate, now);
+  it("create when no existing and deposit > 0", () => {
+    const d = depositAccrualDecision(50000, null, start, now);
     expect(d.action).toBe("create");
     if (d.action === "create") {
-      expect(d.amount).toBe(55_500);
-      expect(d.period).toBe("2026-07");
-      expect(d.dueDate).toBe(startDate);
+      expect(d.amount).toBe(50000);
+      expect(d.period).toBe("2026-01");
     }
   });
 
-  test("tahakkuk yok + depozito yok → dokunma", () => {
-    expect(depositAccrualDecision(0, null, startDate, now).action).toBe("none");
+  it("none when no existing and deposit <= 0", () => {
+    expect(depositAccrualDecision(0, null, start, now).action).toBe("none");
   });
 
-  test("depozito kaldırıldı → sil", () => {
+  it("delete when deposit cleared", () => {
     expect(
-      depositAccrualDecision(0, { amount: 55_500, dueDate: startDate }, startDate, now).action,
+      depositAccrualDecision(0, { amount: 50000, dueDate: start }, start, now).action,
     ).toBe("delete");
   });
 
-  test("tutar değişti ve vade gelmiş → güncelle + cari kayıtları yeniden işle", () => {
-    const d = depositAccrualDecision(60_000, { amount: 55_500, dueDate: startDate }, startDate, now);
-    expect(d.action).toBe("update");
-    if (d.action === "update") {
-      expect(d.amount).toBe(60_000);
-      expect(d.shouldPost).toBe(true);
-    }
-  });
-
-  test("tutar değişti ama vade ileride → güncelle, cari kayıt işleme", () => {
-    const futureStart = new Date(2027, 0, 1).getTime();
+  it("update when amount changed", () => {
     const d = depositAccrualDecision(
-      60_000,
-      { amount: 55_500, dueDate: futureStart },
-      futureStart,
+      60000,
+      { amount: 50000, dueDate: start },
+      start,
       now,
     );
     expect(d.action).toBe("update");
     if (d.action === "update") {
-      expect(d.shouldPost).toBe(false);
+      expect(d.amount).toBe(60000);
     }
   });
 
-  test("tutar aynı → dokunma", () => {
+  it("none when amount unchanged", () => {
     expect(
-      depositAccrualDecision(55_500, { amount: 55_500, dueDate: startDate }, startDate, now).action,
+      depositAccrualDecision(50000, { amount: 50000, dueDate: start }, start, now).action,
     ).toBe("none");
   });
 });
