@@ -55,6 +55,17 @@ export const reconcileAccrualLedgers = internalMutation({
         (e) => e.kind === "accrual",
       );
 
+      // Kontrat başlangıç tarihinden önceki tahakkukları temizle
+      if (accrual.dueDate < contract.startDate) {
+        // Silinen kayıtlar referans Map'ten de düşülsün
+        for (const e of accrualEntries) {
+          await ctx.db.delete(e._id);
+        }
+        await ctx.db.delete(accrual._id);
+        removed += 1;
+        continue;
+      }
+
       if (accrual.dueDate <= now) {
         // Vadesi gelmiş: cari kayıt yoksa kiracı/malik hesabına işle.
         if (accrualEntries.length === 0) {
