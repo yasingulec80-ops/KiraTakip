@@ -38,6 +38,8 @@ const DETAIL_HEADERS = [
   "Kontrat",
   "Tahsil Edilen Kira",
   "Tahsil Edilen Depozito",
+  "Teslim Edilen Kira",
+  "Teslim Edilen Depozito",
   "Vekil Alacak",
   "Teslim Bekleyen",
 ];
@@ -47,6 +49,8 @@ const PROPERTY_HEADERS = [
   "Vekil",
   "Tahsil Edilen Kira",
   "Tahsil Edilen Depozito",
+  "Teslim Edilen Kira",
+  "Teslim Edilen Depozito",
   "Vekil Alacak",
   "Masraf",
   "Teslim Bekleyen",
@@ -465,13 +469,15 @@ export function VekilDevirReport() {
     r.vekilName,
     r.collectedRent,
     r.collectedDeposit,
+    r.rentTransfer,
+    r.depositTransfer,
     r.vekilAlacak,
     r.masraf,
     remainingOf(
       r.collectedRent,
       r.collectedDeposit,
-      0,
-      0,
+      r.rentTransfer,
+      r.depositTransfer,
       r.vekilAlacak,
     ),
   ]);
@@ -483,12 +489,14 @@ export function VekilDevirReport() {
     r.contractLabel,
     r.collectedRent,
     r.collectedDeposit,
+    r.rentTransfer,
+    r.depositTransfer,
     r.vekilAlacak,
     remainingOf(
       r.collectedRent,
       r.collectedDeposit,
-      0,
-      0,
+      r.rentTransfer,
+      r.depositTransfer,
       r.vekilAlacak,
     ),
   ]);
@@ -586,6 +594,8 @@ export function VekilDevirReport() {
                     <TableHead>Vekil</TableHead>
                     <TableHead className="text-right">Tahsil Edilen Kira</TableHead>
                     <TableHead className="text-right">Tahsil Edilen Depozito</TableHead>
+                    <TableHead className="text-right">Teslim Edilen Kira</TableHead>
+                    <TableHead className="text-right">Teslim Edilen Depozito</TableHead>
                     <TableHead className="text-right">Vekil Alacak</TableHead>
                     <TableHead className="text-right">Teslim Bekleyen</TableHead>
                   </TableRow>
@@ -595,8 +605,8 @@ export function VekilDevirReport() {
                     const remaining = remainingOf(
                       r.collectedRent,
                       r.collectedDeposit,
-                      0,
-                      0,
+                      r.rentTransfer,
+                      r.depositTransfer,
                       r.vekilAlacak,
                     );
                     return (
@@ -614,21 +624,41 @@ export function VekilDevirReport() {
                             : "—"}
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
-                          {r.vekilAlacak > 0 ? formatCurrency(r.vekilAlacak) : "—"}
+                          {r.rentTransfer > 0 ? (
+                            <span className="text-muted-foreground">{formatCurrency(r.rentTransfer)}</span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
-                          {remaining > 0 ? (
-                            <Button
-                              type="button"
-                              variant="link"
-                              className="h-auto rounded-none p-0 font-medium text-amber-700 underline-offset-4 hover:underline"
-                              onClick={() =>
-                                openDevir(r.ownerId, r.ownerName, r.vekilName)
-                              }
-                              title="Devir penceresini aç"
-                            >
-                              {formatCurrency(remaining)}
-                            </Button>
+                          {r.depositTransfer > 0 ? (
+                            <span className="text-muted-foreground">{formatCurrency(r.depositTransfer)}</span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {r.vekilAlacak > 0 ? formatCurrency(r.vekilAlacak) : "—"}
+                        </TableCell>
+                        <TableCell className="text-right font-medium tabular-nums">
+                          {remaining !== 0 ? (
+                            remaining > 0 ? (
+                              <Button
+                                type="button"
+                                variant="link"
+                                className="h-auto rounded-none p-0 font-medium text-amber-700 underline-offset-4 hover:underline"
+                                onClick={() =>
+                                  openDevir(r.ownerId, r.ownerName, r.vekilName)
+                                }
+                                title="Devir penceresini aç"
+                              >
+                                {formatCurrency(remaining)}
+                              </Button>
+                            ) : (
+                              <span className="text-red-600">
+                                {formatCurrency(remaining)}
+                              </span>
+                            )
                           ) : (
                             <span className="text-muted-foreground">—</span>
                           )}
@@ -687,6 +717,8 @@ export function VekilDevirReport() {
                     <TableHead>Vekil</TableHead>
                     <TableHead className="text-right">Tahsil Edilen Kira</TableHead>
                     <TableHead className="text-right">Tahsil Edilen Depozito</TableHead>
+                    <TableHead className="text-right">Teslim Edilen Kira</TableHead>
+                    <TableHead className="text-right">Teslim Edilen Depozito</TableHead>
                     <TableHead className="text-right">Vekil Alacak</TableHead>
                     <TableHead className="text-right">Masraf</TableHead>
                     <TableHead className="text-right">Teslim Bekleyen</TableHead>
@@ -697,8 +729,8 @@ export function VekilDevirReport() {
                     const remaining = remainingOf(
                       r.collectedRent,
                       r.collectedDeposit,
-                      0,
-                      0,
+                      r.rentTransfer,
+                      r.depositTransfer,
                       r.vekilAlacak,
                     );
                     return (
@@ -712,6 +744,20 @@ export function VekilDevirReport() {
                           {r.collectedDeposit > 0 ? formatCurrency(r.collectedDeposit) : "—"}
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
+                          {r.rentTransfer > 0 ? (
+                            <span className="text-muted-foreground">{formatCurrency(r.rentTransfer)}</span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {r.depositTransfer > 0 ? (
+                            <span className="text-muted-foreground">{formatCurrency(r.depositTransfer)}</span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
                           {r.vekilAlacak > 0 ? formatCurrency(r.vekilAlacak) : "—"}
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
@@ -722,8 +768,12 @@ export function VekilDevirReport() {
                           )}
                         </TableCell>
                         <TableCell className="text-right font-medium tabular-nums">
-                          {remaining > 0 ? (
-                            <span className="text-amber-700">{formatCurrency(remaining)}</span>
+                          {remaining !== 0 ? (
+                            remaining > 0 ? (
+                              <span className="text-amber-700">{formatCurrency(remaining)}</span>
+                            ) : (
+                              <span className="text-red-600">{formatCurrency(remaining)}</span>
+                            )
                           ) : (
                             <span className="text-muted-foreground">—</span>
                           )}
@@ -765,6 +815,8 @@ export function VekilDevirReport() {
                         <TableHead>Kontrat</TableHead>
                         <TableHead className="text-right">Tahsil Edilen Kira</TableHead>
                         <TableHead className="text-right">Tahsil Edilen Depozito</TableHead>
+                        <TableHead className="text-right">Teslim Edilen Kira</TableHead>
+                        <TableHead className="text-right">Teslim Edilen Depozito</TableHead>
                         <TableHead className="text-right">Vekil Alacak</TableHead>
                         <TableHead className="text-right">Teslim Bekleyen</TableHead>
                       </TableRow>
@@ -774,8 +826,8 @@ export function VekilDevirReport() {
                         const remaining = remainingOf(
                           r.collectedRent,
                           r.collectedDeposit,
-                          0,
-                          0,
+                          r.rentTransfer,
+                          r.depositTransfer,
                           r.vekilAlacak,
                         );
                         return (
@@ -797,13 +849,33 @@ export function VekilDevirReport() {
                                 : "—"}
                             </TableCell>
                             <TableCell className="text-right tabular-nums">
+                              {r.rentTransfer > 0 ? (
+                                <span className="text-muted-foreground">{formatCurrency(r.rentTransfer)}</span>
+                              ) : (
+                                <span className="text-muted-foreground">—</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums">
+                              {r.depositTransfer > 0 ? (
+                                <span className="text-muted-foreground">{formatCurrency(r.depositTransfer)}</span>
+                              ) : (
+                                <span className="text-muted-foreground">—</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums">
                               {r.vekilAlacak > 0 ? formatCurrency(r.vekilAlacak) : "—"}
                             </TableCell>
                             <TableCell className="text-right font-medium tabular-nums">
-                              {remaining > 0 ? (
-                                <span className="text-amber-700">
-                                  {formatCurrency(remaining)}
-                                </span>
+                              {remaining !== 0 ? (
+                                remaining > 0 ? (
+                                  <span className="text-amber-700">
+                                    {formatCurrency(remaining)}
+                                  </span>
+                                ) : (
+                                  <span className="text-red-600">
+                                    {formatCurrency(remaining)}
+                                  </span>
+                                )
                               ) : (
                                 <span className="text-muted-foreground">—</span>
                               )}

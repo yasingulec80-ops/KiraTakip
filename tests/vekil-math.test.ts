@@ -4,6 +4,7 @@ import {
   vekilTotalsOf,
   vekilBorcOf,
   remainingOf,
+  remainingClamped,
   devirablesOf,
   devirablesFor,
   devirAvailableOf,
@@ -121,8 +122,8 @@ describe("remainingOf", () => {
     expect(remainingOf(50000, 0, 20000, 0, 5000)).toBe(25000);
   });
 
-  it("never goes negative", () => {
-    expect(remainingOf(10000, 0, 15000, 0, 0)).toBe(0);
+  it("can be negative (over-delivered)", () => {
+    expect(remainingOf(10000, 0, 15000, 0, 0)).toBe(-5000);
   });
 
   it("accounts for deposit", () => {
@@ -131,6 +132,16 @@ describe("remainingOf", () => {
 
   it("zero with no activity", () => {
     expect(remainingOf(0, 0, 0, 0, 0)).toBe(0);
+  });
+});
+
+describe("remainingClamped", () => {
+  it("clamps negative values to 0", () => {
+    expect(remainingClamped(10000, 0, 15000, 0, 0)).toBe(0);
+  });
+
+  it("returns positive values unchanged", () => {
+    expect(remainingClamped(50000, 0, 20000, 0, 5000)).toBe(25000);
   });
 });
 

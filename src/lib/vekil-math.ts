@@ -104,14 +104,21 @@ export const remainingOf = (
   depositTransfer: number,
   vekilAlacak = 0,
 ): number =>
-  Math.max(
-    0,
-    collectedRent +
-      collectedDeposit -
-      rentTransfer -
-      depositTransfer -
-      vekilAlacak,
-  );
+  collectedRent +
+    collectedDeposit -
+    rentTransfer -
+    depositTransfer -
+    vekilAlacak;
+
+/** remainingOf ile aynı formül ama negatif değerleri sıfıra clamp eder (eski davranış). */
+export const remainingClamped = (
+  collectedRent: number,
+  collectedDeposit: number,
+  rentTransfer: number,
+  depositTransfer: number,
+  vekilAlacak = 0,
+): number =>
+  Math.max(0, remainingOf(collectedRent, collectedDeposit, rentTransfer, depositTransfer, vekilAlacak));
 
 /** Vekilin tahsil edip henüz devretmediği tutarlar (kira / depozito ayrı). */
 export const devirablesOf = (
