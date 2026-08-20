@@ -166,19 +166,23 @@ export const createCollectionWithLedger = async (
       date: args.date,
       referenceId,
     });
-    await postLedgerEntry(ctx, actor, {
-      propertyId: contract.propertyId,
-      contractId: contract._id,
-      personType: "owner",
-      personId: contract.ownerId,
-      kind: "collection",
-      amount: -args.amount,
-      description: "Kira tahsilatı (vekil)",
-      date: args.date,
-      referenceId,
-    });
+    // Vekil tahsilatı yapıldığında malik cari hesabına entry atılmaz;
+    // malik, tahsilat teslim edildiğinde (devir) borç kaydı görür.
+    if (!args.collectedByProxyOwnerId) {
+      await postLedgerEntry(ctx, actor, {
+        propertyId: contract.propertyId,
+        contractId: contract._id,
+        personType: "owner",
+        personId: contract.ownerId,
+        kind: "collection",
+        amount: -args.amount,
+        description: "Kira tahsilatı (vekil)",
+        date: args.date,
+        referenceId,
+      });
+    }
   } else {
-    // Kiracı ödedi → kiracı alacaklanır, malik borçlanır.
+    // Kiracı ödedi → kiracı alacaklanır.
     const tenantId = args.tenantId ?? contract.tenantId;
     await postLedgerEntry(ctx, actor, {
       propertyId: contract.propertyId,
@@ -191,17 +195,21 @@ export const createCollectionWithLedger = async (
       date: args.date,
       referenceId,
     });
-    await postLedgerEntry(ctx, actor, {
-      propertyId: contract.propertyId,
-      contractId: contract._id,
-      personType: "owner",
-      personId: contract.ownerId,
-      kind: "collection",
-      amount: -args.amount,
-      description: "Kira tahsilatı",
-      date: args.date,
-      referenceId,
-    });
+    // Vekil tahsilatı yapıldığında malik cari hesabına entry atılmaz;
+    // malik, tahsilat teslim edildiğinde (devir) borç kaydı görür.
+    if (!args.collectedByProxyOwnerId) {
+      await postLedgerEntry(ctx, actor, {
+        propertyId: contract.propertyId,
+        contractId: contract._id,
+        personType: "owner",
+        personId: contract.ownerId,
+        kind: "collection",
+        amount: -args.amount,
+        description: "Kira tahsilatı",
+        date: args.date,
+        referenceId,
+      });
+    }
   }
 
   // Tahsilatı yapan vekil: tahsil edilen tutar teslim edilene dek cari hesabında borç.

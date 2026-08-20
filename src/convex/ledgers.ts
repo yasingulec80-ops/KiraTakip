@@ -266,12 +266,23 @@ export const devir = mutation({
       transferType === "deposit"
         ? "Vekil devri — depozito teslimi"
         : "Vekil devri — tahsilat teslimi";
+    // Vekil: borç kapatılır (+)
     await postLedgerEntry(ctx, actor, {
       personType: "proxy",
       personId: args.ownerId,
       ownerId: args.ownerId,
       kind: "transfer",
       amount: args.amount,
+      description: args.note ? `${base} · ${args.note}` : base,
+      date: args.date,
+    });
+    // Malik: teslim edilen tutar borç olarak kaydedilir (−)
+    // Vekil tahsilatı malik cari hesabına teslim anında işlenir.
+    await postLedgerEntry(ctx, actor, {
+      personType: "owner",
+      personId: args.ownerId,
+      kind: "transfer",
+      amount: -args.amount,
       description: args.note ? `${base} · ${args.note}` : base,
       date: args.date,
     });
