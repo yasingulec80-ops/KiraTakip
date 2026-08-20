@@ -372,7 +372,7 @@ export function DepositSection() {
           </p>
         </div>
         <div className="bg-card p-5">
-          <p className="eyebrow text-muted-foreground">Malike Ödenen</p>
+          <p className="eyebrow text-muted-foreground">Malike Teslim Edilen</p>
           <p className="mt-2 font-display text-2xl font-light tabular-nums">
             {formatCurrency(totals.paidToOwner)}
           </p>
