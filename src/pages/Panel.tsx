@@ -28,7 +28,6 @@ import {
   increasedRent,
   isIncreaseDue,
 } from "@/lib/rent-increase";
-import { devirablesFor } from "@/lib/vekil-math";
 import { OwnerSection } from "@/components/panel/OwnerSection";
 import { PropertySection } from "@/components/panel/PropertySection";
 import { TenantSection } from "@/components/panel/TenantSection";
@@ -218,19 +217,6 @@ export default function Panel() {
         caption: "toplam tahsilat",
       },
       {
-        id: "deliverableRents",
-        label: "Teslim Edilebilir Tahsilat",
-        value: money(
-          (owners ?? [])
-            .filter((o) => o.proxy)
-            .reduce((sum, o) => {
-              const d = devirablesFor(ledgerEntries ?? [], o._id.toString());
-              return sum + d.rent;
-            }, 0),
-        ),
-        caption: "vekilin teslim etmediği kira",
-      },
-      {
         id: "owners",
         label: "Malikler",
         value: count(owners?.length),
@@ -259,7 +245,6 @@ export default function Panel() {
       deposits: "deposits",
       pendingRents: "accruals",
       collectedRents: "collections",
-      deliverableRents: "ledgers",
       owners: "owners",
       tenants: "tenants",
     };

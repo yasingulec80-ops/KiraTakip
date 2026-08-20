@@ -114,6 +114,7 @@ export function LedgerSection() {
   const tenants = useQuery(api.tenants.list);
   const properties = useQuery(api.properties.list);
   const contracts = useQuery(api.contracts.list);
+  const collections = useQuery(api.collections.list);
   const removeEntry = useMutation(api.ledgers.removeEntry);
   const devir = useMutation(api.ledgers.devir);
 
@@ -197,14 +198,32 @@ export function LedgerSection() {
       });
   }, [owners, tenants, rangeFilteredEntries, search]);
 
-  const entriesOf = (account: PersonAccount): LedgerEntry[] =>
-    rangeFilteredEntries
-      .filter(
-        (e) =>
-          e.personType === account.personType &&
-          e.personId.toString() === account.personId,
-      )
-      .sort((a, b) => b.date - a.date);
+  const entriesOf = (account: PersonAccount): LedgerEntry[] => {
+    let filtered = rangeFilteredEntries.filter(
+      (e) =>
+        e.personType === account.personType &&
+        e.personId.toString() === account.personId,
+    );
+    // Malik hesabında vekilin yaptığı tahsilat kayıtlarını gösterme
+    if (account.personType === "owner" && collections) {
+      const vekilCollectionRefs = new Set(
+        collections
+          .filter((c) => c.collectedByProxyOwnerId)
+          .map((c) => c._id.toString()),
+      );
+      filtered = filtered.filter((e) => {
+        if (
+          e.kind === "collection" &&
+          e.referenceId &&
+          vekilCollectionRefs.has(e.referenceId)
+        ) {
+          return false;
+        }
+        return true;
+      });
+    }
+    return filtered.sort((a, b) => b.date - a.date);
+  };
 
   /** Vekilin tahsil edip henüz malike teslim etmediği tutarlar (kira / depozito ayrı). */
   const devirablesOf = (account: PersonAccount): { rent: number; deposit: number } =>
@@ -514,6 +533,22 @@ export function LedgerSection() {
         account={viewing}
         entries={viewing ? entriesOf(viewing) : []}
         devirable={viewing ? outstandingOf(viewing) : 0}
+        ownerDeliverable={
+          viewing?.personType === "owner"
+            ? (() => {
+                const owner = (owners ?? []).find(
+                  (o) => o._id.toString() === viewing.personId,
+                );
+                if (!owner?.proxy) return 0;
+                const proxyEntries = (entries ?? []).filter(
+                  (e) =>
+                    e.personType === "proxy" &&
+                    e.personId.toString() === viewing.personId,
+                );
+                return devirablesFor(proxyEntries, viewing.personId).rent;
+              })()
+            : 0
+        }
         properties={properties}
         onClose={() => setViewing(null)}
         onAddEntry={(account) => {
@@ -590,6 +625,7 @@ function PersonDetailDialog({
   account,
   entries,
   devirable,
+  ownerDeliverable,
   properties,
   onClose,
   onAddEntry,
@@ -601,6 +637,7 @@ function PersonDetailDialog({
   account: PersonAccount | null;
   entries: LedgerEntry[];
   devirable: number;
+  ownerDeliverable?: number;
   properties: { _id: string; name: string; address: string }[] | undefined;
   onClose: () => void;
   onAddEntry: (account: PersonAccount) => void;
@@ -687,8 +724,8 @@ function PersonDetailDialog({
     >
       {account && (
         <div className="space-y-4">
-          {/* Özet kartları — Borç / Alacak / Bakiye */}
-          <div className="grid grid-cols-3 gap-3">
+          {/* Özet kartları — Borç / Alacak / Bakiye (+ Vekil Teslim) */}
+          <div className={`grid gap-3 ${ownerDeliverable && ownerDeliverable > 0 ? "grid-cols-4" : "grid-cols-3"}`}>
             <div className="relative overflow-hidden rounded-lg border border-emerald-200 bg-emerald-50/60 p-5">
               <div className="flex items-center justify-between">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-700/80">Toplam Alacak</p>
@@ -732,6 +769,22 @@ function PersonDetailDialog({
                     : `-${formatCurrency(-balance)}`}
               </p>
             </div>
+            {ownerDeliverable && ownerDeliverable > 0 && (
+              <div className="relative overflow-hidden rounded-lg border border-brand/30 bg-brand/5 p-5">
+                <div className="flex items-center justify-between">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-brand/80">Teslim Edilebilir Kira</p>
+                  <span className="inline-flex items-center justify-center rounded-full bg-brand/10 px-2 py-0.5 text-[10px] font-medium text-brand">
+                    Vekil
+                  </span>
+                </div>
+                <p className="mt-2 font-display text-2xl font-bold tabular-nums text-brand">
+                  {formatCurrency(ownerDeliverable)}
+                </p>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  vekilin teslim etmediği tutar
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Vekil özeti — yalnızca vekil hesaplarında */}
