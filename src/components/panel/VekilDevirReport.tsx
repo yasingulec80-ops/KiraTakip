@@ -424,6 +424,23 @@ export function VekilDevirReport() {
       entry.depositTransfer += r.depositTransfer;
       entry.vekilAlacak += r.vekilAlacak;
     }
+    // "—" (propertyId'siz) kayıtları, aynı vekilin tek gayrimenkulü varsa ona taşı
+    const unkeyed = map.get("—");
+    if (unkeyed) {
+      const vekilEntries = [...map.values()].filter(
+        (e) => e.propertyId !== "—" && e.vekilName === unkeyed.vekilName,
+      );
+      if (vekilEntries.length === 1) {
+        const target = vekilEntries[0];
+        target.collectedRent += unkeyed.collectedRent;
+        target.collectedDeposit += unkeyed.collectedDeposit;
+        target.rentTransfer += unkeyed.rentTransfer;
+        target.depositTransfer += unkeyed.depositTransfer;
+        target.vekilAlacak += unkeyed.vekilAlacak;
+        map.delete("—");
+      }
+    }
+
     // Vekil adına ödenen masrafları gayrimenkul bazında ekle
     const proxyOwnerIds = new Set(
       (owners ?? [])
