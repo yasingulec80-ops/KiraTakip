@@ -40,7 +40,7 @@ import {
 } from "@/lib/deposit-math";
 import { useMutation, useQuery } from "convex/react";
 
-import { Banknote, Plus, RotateCcw } from "lucide-react";
+import { Banknote, Pencil, Plus, RotateCcw } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { DialogShell, Field, Row } from "./fields";
@@ -81,6 +81,7 @@ export function DepositSection() {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [editingDeposit, setEditingDeposit] = useState<Contract | null>(null);
   const [returning, setReturning] = useState<Contract | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [recordContractId, setRecordContractId] = useState("");
@@ -436,7 +437,7 @@ export function DepositSection() {
                   const status = statusOf(c);
                   const held = heldOf(c);
                   return (
-                    <TableRow key={c._id} className="align-middle">
+                    <TableRow key={c._id} className="align-middle cursor-pointer" onDoubleClick={() => setEditingDeposit(c)}>
                       <TableCell>
                         <div className="font-medium">{property?.name ?? "—"}</div>
                         <div className="max-w-44 truncate text-xs text-muted-foreground">
@@ -484,6 +485,17 @@ export function DepositSection() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 rounded-none text-muted-foreground hover:text-foreground"
+                            onClick={(ev) => { ev.stopPropagation(); setEditingDeposit(c); }}
+                            aria-label="Depozito detayı"
+                            title="Depozito detayını düzenle"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
                           <Button
                             type="button"
                             variant="ghost"

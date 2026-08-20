@@ -52,6 +52,7 @@ const PROPERTY_HEADERS = [
   "Kira Devri",
   "Depozito Devri",
   "Vekil Alacak",
+  "Masraf",
   "Teslim Bekleyen",
 ];
 
@@ -64,6 +65,7 @@ interface PropertyRow {
   rentTransfer: number;
   depositTransfer: number;
   vekilAlacak: number;
+  masraf: number;
 }
 
 interface SummaryRow {
@@ -99,6 +101,7 @@ export function VekilDevirReport() {
   const contracts = useQuery(api.contracts.list);
   const properties = useQuery(api.properties.list);
   const tenants = useQuery(api.tenants.list);
+  const expenses = useQuery(api.expenses.list);
 
   const [search, setSearch] = useState("");
   const [from, setFrom] = useState("");
@@ -405,6 +408,7 @@ export function VekilDevirReport() {
           rentTransfer: 0,
           depositTransfer: 0,
           vekilAlacak: 0,
+          masraf: 0,
         };
         map.set(r.propertyName, entry);
       }
@@ -414,10 +418,38 @@ export function VekilDevirReport() {
       entry.depositTransfer += r.depositTransfer;
       entry.vekilAlacak += r.vekilAlacak;
     }
+    // Vekil adına ödenen masrafları gayrimenkul bazında ekle
+    const proxyOwnerIds = new Set(
+      (owners ?? [])
+        .filter((o) => o.proxy)
+        .map((o) => o._id.toString()),
+    );
+    for (const exp of (expenses ?? [])) {
+      if (exp.paidByType !== "proxy" || !exp.payerOwnerId) continue;
+      if (!proxyOwnerIds.has(exp.payerOwnerId.toString())) continue;
+      const prop = propertyMap.get(exp.propertyId.toString());
+      if (!prop) continue;
+      let entry = map.get(prop.name);
+      if (!entry) {
+        entry = {
+          propertyId: prop._id.toString(),
+          propertyName: prop.name,
+          vekilName: "",
+          collectedRent: 0,
+          collectedDeposit: 0,
+          rentTransfer: 0,
+          depositTransfer: 0,
+          vekilAlacak: 0,
+          masraf: 0,
+        };
+        map.set(prop.name, entry);
+      }
+      entry.masraf += exp.amount;
+    }
     return [...map.values()].sort((a, b) =>
       a.propertyName.localeCompare(b.propertyName, "tr"),
     );
-  }, [detailRows]);
+  }, [detailRows, owners, expenses, propertyMap]);
 
   const propertyExportRows = propertyRows.map((r) => [
     r.propertyName,
@@ -427,6 +459,7 @@ export function VekilDevirReport() {
     r.rentTransfer,
     r.depositTransfer,
     r.vekilAlacak,
+    r.masraf,
     remainingOf(
       r.collectedRent,
       r.collectedDeposit,
@@ -669,6 +702,7 @@ export function VekilDevirReport() {
                     <TableHead className="text-right">Kira Devri</TableHead>
                     <TableHead className="text-right">Depozito Devri</TableHead>
                     <TableHead className="text-right">Vekil Alacak</TableHead>
+                    <TableHead className="text-right">Masraf</TableHead>
                     <TableHead className="text-right">Teslim Bekleyen</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -699,6 +733,13 @@ export function VekilDevirReport() {
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
                           {r.vekilAlacak > 0 ? formatCurrency(r.vekilAlacak) : "—"}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {r.masraf > 0 ? (
+                            <span className="text-muted-foreground">{formatCurrency(r.masraf)}</span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
                         </TableCell>
                         <TableCell className="text-right font-medium tabular-nums">
                           {remaining > 0 ? (

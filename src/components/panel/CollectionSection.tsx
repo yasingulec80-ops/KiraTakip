@@ -41,7 +41,7 @@ import {
 } from "@/lib/export";
 import { sameProxyCollectionConflict } from "@/lib/collection-guard";
 import { useMutation, useQuery } from "convex/react";
-import { HandCoins, Trash2 } from "lucide-react";
+import { HandCoins, Pencil, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { DialogShell, Field, Row } from "./fields";
@@ -81,6 +81,7 @@ export function CollectionSection() {
   const owners = useQuery(api.owners.list);
   const accruals = useQuery(api.accruals.list);
   const createCollection = useMutation(api.collections.create);
+  const updateCollection = useMutation(api.collections.update);
   const removeCollection = useMutation(api.collections.remove);
 
   const [search, setSearch] = useState("");
@@ -88,6 +89,7 @@ export function CollectionSection() {
   const [to, setTo] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [deleting, setDeleting] = useState<Collection | null>(null);
+  const [editing, setEditing] = useState<Collection | null>(null);
 
   const contractMap = useMemo(() => {
     const map = new Map<string, Contract>();
@@ -245,6 +247,37 @@ export function CollectionSection() {
     }
   };
 
+
+  const handleUpdate = async (form: CollectionFormState) => {
+    if (!editing) return;
+    const date = parseDateInput(form.date);
+    if (!form.contractId || !date) {
+      toast.error("Kontrat ve tahsilat tarihi zorunludur.");
+      return;
+    }
+    const amount = parseNumber(form.amount);
+    if (amount === undefined || amount <= 0) {
+      toast.error("Tutar geçerli bir değer olmalıdır.");
+      return;
+    }
+    try {
+      await updateCollection({
+        id: editing._id,
+        amount,
+        date,
+        notes: form.notes.trim() || undefined,
+        accrualId: form.accrualId
+          ? (form.accrualId as Id<"accruals">)
+          : undefined,
+      });
+      toast.success("Tahsilat güncellendi.");
+      setFormOpen(false);
+      setEditing(null);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Güncelleme başarısız.");
+    }
+  };
+
   const handleDelete = async () => {
     if (!deleting) return;
     try {
@@ -328,7 +361,7 @@ export function CollectionSection() {
                     ? accrualMap.get(c.accrualId.toString())
                     : undefined;
                   return (
-                    <TableRow key={c._id} className="align-middle">
+                    <TableRow key={c._id} className="align-middle cursor-pointer" onDoubleClick={() => { setEditing(c); setFormOpen(true); }}>
                       <TableCell className="text-sm">{formatDate(c.date)}</TableCell>
                       <TableCell className="text-sm">{property?.name ?? "—"}</TableCell>
                       <TableCell className="text-sm">{tenant?.name ?? "—"}</TableCell>
@@ -374,16 +407,28 @@ export function CollectionSection() {
                       </TableCell>
                       <TableCell className="text-right">
                         {isAdmin && (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 rounded-none text-muted-foreground hover:text-destructive"
-                            onClick={() => setDeleting(c)}
-                            aria-label="Tahsilatı sil"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 rounded-none text-muted-foreground hover:text-foreground"
+                              onClick={(e) => { e.stopPropagation(); setEditing(c); setFormOpen(true); }}
+                              aria-label="Tahsilatı düzenle"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 rounded-none text-muted-foreground hover:text-destructive"
+                              onClick={(e) => { e.stopPropagation(); setDeleting(c); }}
+                              aria-label="Tahsilatı sil"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         )}
                       </TableCell>
                     </TableRow>
@@ -409,6 +454,7 @@ export function CollectionSection() {
       <CollectionFormDialog
         open={formOpen}
         onOpenChange={setFormOpen}
+        editing={editing}
         contracts={contracts ?? []}
         propertyMap={propertyMap}
         tenantMap={tenantMap}
@@ -466,6 +512,8 @@ function CollectionFormDialog({
   owners,
   accruals,
   onSave,
+  editing,
+  onUpdate,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -475,6 +523,8 @@ function CollectionFormDialog({
   owners: Owner[];
   accruals: Doc<"accruals">[];
   onSave: (form: CollectionFormState) => void;
+  editing?: Collection | null;
+  onUpdate?: (form: CollectionFormState) => void;
 }) {
   const [form, setForm] = useState<CollectionFormState>({
     contractId: "",
@@ -490,20 +540,35 @@ function CollectionFormDialog({
   const [error, setError] = useState<string | null>(null);
 
   const [lastKey, setLastKey] = useState("");
-  const key = open ? "new" : "closed";
+  const editKey = editing?._id.toString() ?? "";
+  const key = open ? (editing ? `edit-${editKey}` : "new") : "closed";
   if (key !== lastKey) {
     setLastKey(key);
-    setForm({
-      contractId: "",
-      accrualId: "",
-      amount: "",
-      date: TODAY,
-      paidByType: "tenant",
-      collectionType: "rent",
-      collectedByProxyOwnerId: "",
-      personId: "",
-      notes: "",
-    });
+    if (editing) {
+      setForm({
+        contractId: editing.contractId.toString(),
+        accrualId: editing.accrualId?.toString() ?? "",
+        amount: String(editing.amount),
+        date: dateToInput(editing.date),
+        paidByType: editing.paidByType ?? "tenant",
+        collectionType: editing.collectionType ?? "rent",
+        collectedByProxyOwnerId: editing.collectedByProxyOwnerId?.toString() ?? "",
+        personId: editing.tenantId?.toString() ?? editing.proxyOwnerId?.toString() ?? "",
+        notes: editing.notes ?? "",
+      });
+    } else {
+      setForm({
+        contractId: "",
+        accrualId: "",
+        amount: "",
+        date: TODAY,
+        paidByType: "tenant",
+        collectionType: "rent",
+        collectedByProxyOwnerId: "",
+        personId: "",
+        notes: "",
+      });
+    }
     setError(null);
   }
 
@@ -554,15 +619,19 @@ function CollectionFormDialog({
       setError("Ödeyen vekil ile tahsilatı yapan aynı vekil olamaz.");
       return;
     }
-    onSave(form);
+    if (editing && onUpdate) {
+      onUpdate(form);
+    } else {
+      onSave(form);
+    }
   };
 
   return (
     <DialogShell
       open={open}
       onOpenChange={onOpenChange}
-      title="Tahsilat Kaydı"
-      description="Tahsilat işlendiğinde cari hesaplara otomatik kaydedilir."
+      title={editing ? "Tahsilat Düzenle" : "Tahsilat Kaydı"}
+      description={editing ? "Mevcut tahsilat kaydını güncelleyin." : "Tahsilat işlendiğinde cari hesaplara otomatik kaydedilir."}
       wide
       footer={
         <>
@@ -575,7 +644,7 @@ function CollectionFormDialog({
             Vazgeç
           </Button>
           <Button type="button" className="rounded-none" onClick={submit}>
-            Tahsilatı İşle
+            {editing ? "Güncelle" : "Tahsilatı İşle"}
           </Button>
         </>
       }

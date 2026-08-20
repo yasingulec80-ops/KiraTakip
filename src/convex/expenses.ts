@@ -1,6 +1,6 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { getActor, getAuthorizedPropertyIds, requireActor, requirePropertyAccess } from "./ledger_helpers";
+import { getActor, getAuthorizedPropertyIds, postLedgerEntry, requireActor, requirePropertyAccess } from "./ledger_helpers";
 import { createExpenseWithLedger } from "./ledger_ops";
 import { deleteLedgerForReference } from "./ledger_helpers";
 import { expenseCategoryValidator } from "./schema";
@@ -47,6 +47,82 @@ export const create = mutation({
       payerTenantId: args.payerTenantId,
       description: args.description,
     });
+  },
+});
+
+/** Update an expense (admin only). Replaces old ledger entries. */
+export const update = mutation({
+  args: {
+    id: v.id("expenses"),
+    category: expenseCategoryValidator,
+    amount: v.number(),
+    date: v.number(),
+    description: v.string(),
+    paidByType: v.optional(
+      v.union(v.literal("owner"), v.literal("tenant"), v.literal("proxy")),
+    ),
+    payerOwnerId: v.optional(v.id("owners")),
+    payerTenantId: v.optional(v.id("tenants")),
+  },
+  handler: async (ctx, args) => {
+    const actor = await requireActor(ctx);
+    const existing = await ctx.db.get(args.id);
+    if (!existing) throw new ConvexError("Masraf bulunamadı.");
+    await requirePropertyAccess(ctx, actor, existing.propertyId);
+
+    // Eski cari hesap kayıtlarını sil
+    await deleteLedgerForReference(ctx, args.id.toString());
+
+    // Güncelle
+    await ctx.db.patch(args.id, {
+      category: args.category,
+      amount: args.amount,
+      date: args.date,
+      description: args.description,
+      paidByType: args.paidByType,
+      payerOwnerId: args.payerOwnerId,
+      payerTenantId: args.payerTenantId,
+    });
+
+    // Yeni cari hesap kaydı oluştur
+    const paidByType = args.paidByType ?? "owner";
+    if (paidByType === "owner" && args.payerOwnerId) {
+      await postLedgerEntry(ctx, actor, {
+        propertyId: existing.propertyId,
+        contractId: existing.contractId,
+        personType: "owner",
+        personId: args.payerOwnerId,
+        kind: "expense",
+        amount: args.amount,
+        description: args.description,
+        date: args.date,
+        referenceId: args.id.toString(),
+      });
+    } else if (paidByType === "proxy" && args.payerOwnerId) {
+      await postLedgerEntry(ctx, actor, {
+        propertyId: existing.propertyId,
+        contractId: existing.contractId,
+        personType: "proxy",
+        personId: args.payerOwnerId,
+        kind: "expense",
+        amount: args.amount,
+        description: args.description,
+        date: args.date,
+        referenceId: args.id.toString(),
+      });
+    } else if (paidByType === "tenant" && args.payerTenantId) {
+      await postLedgerEntry(ctx, actor, {
+        propertyId: existing.propertyId,
+        contractId: existing.contractId,
+        personType: "tenant",
+        personId: args.payerTenantId,
+        kind: "expense",
+        amount: args.amount,
+        description: args.description,
+        date: args.date,
+        referenceId: args.id.toString(),
+      });
+    }
   },
 });
 

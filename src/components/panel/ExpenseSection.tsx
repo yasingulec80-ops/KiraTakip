@@ -40,7 +40,7 @@ import {
   printReport,
 } from "@/lib/export";
 import { useMutation, useQuery } from "convex/react";
-import { ReceiptText, Trash2 } from "lucide-react";
+import { Pencil, ReceiptText, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { DialogShell, Field, Row } from "./fields";
@@ -84,6 +84,7 @@ export function ExpenseSection() {
   const owners = useQuery(api.owners.list);
   const tenants = useQuery(api.tenants.list);
   const createExpense = useMutation(api.expenses.create);
+  const updateExpense = useMutation(api.expenses.update);
   const removeExpense = useMutation(api.expenses.remove);
 
   const [search, setSearch] = useState("");
@@ -91,6 +92,7 @@ export function ExpenseSection() {
   const [to, setTo] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [deleting, setDeleting] = useState<Expense | null>(null);
+  const [editing, setEditing] = useState<Expense | null>(null);
 
   const propertyMap = useMemo(() => {
     const map = new Map<string, Property>();
@@ -212,6 +214,46 @@ export function ExpenseSection() {
     }
   };
 
+
+  const handleUpdate = async (form: ExpenseFormState) => {
+    if (!editing) return;
+    const date = parseDateInput(form.date);
+    if (!form.propertyId || !date) {
+      toast.error("Gayrimenkul ve masraf tarihi zorunludur.");
+      return;
+    }
+    const amount = parseNumber(form.amount);
+    if (amount === undefined || amount <= 0) {
+      toast.error("Tutar geçerli bir değer olmalıdır.");
+      return;
+    }
+    if (form.description.trim() === "") {
+      toast.error("Açıklama zorunludur.");
+      return;
+    }
+    try {
+      await updateExpense({
+        id: editing._id,
+        category: form.category as any,
+        amount,
+        date,
+        description: form.description.trim(),
+        paidByType: form.paidByType as any || undefined,
+        payerOwnerId: form.paidByType === "owner" || form.paidByType === "proxy"
+          ? (form.personId as Id<"owners">)
+          : undefined,
+        payerTenantId: form.paidByType === "tenant"
+          ? (form.personId as Id<"tenants">)
+          : undefined,
+      });
+      toast.success("Masraf güncellendi.");
+      setFormOpen(false);
+      setEditing(null);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Güncelleme başarısız.");
+    }
+  };
+
   const handleDelete = async () => {
     if (!deleting) return;
     try {
@@ -296,7 +338,7 @@ export function ExpenseSection() {
                   {filtered.map((e) => {
                     const property = propertyMap.get(e.propertyId.toString());
                     return (
-                      <TableRow key={e._id} className="align-middle">
+                      <TableRow key={e._id} className="align-middle cursor-pointer" onDoubleClick={() => { setEditing(e); setFormOpen(true); }}>
                         <TableCell className="text-sm">{formatDate(e.date)}</TableCell>
                         <TableCell className="text-sm">{property?.name ?? "—"}</TableCell>
                         <TableCell>
@@ -358,6 +400,8 @@ export function ExpenseSection() {
         owners={owners ?? []}
         tenants={tenants ?? []}
         onSave={handleSave}
+        editing={editing}
+        onUpdate={handleUpdate}
       />
 
       <AlertDialog open={deleting !== null} onOpenChange={(open) => !open && setDeleting(null)}>
@@ -425,6 +469,8 @@ function ExpenseFormDialog({
   owners,
   tenants,
   onSave,
+  editing,
+  onUpdate,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -433,6 +479,8 @@ function ExpenseFormDialog({
   owners: Owner[];
   tenants: Tenant[];
   onSave: (form: ExpenseFormState) => void;
+  editing?: Expense | null;
+  onUpdate?: (form: ExpenseFormState) => void;
 }) {
   const [form, setForm] = useState<ExpenseFormState>({
     propertyId: "",
@@ -447,19 +495,33 @@ function ExpenseFormDialog({
   const [error, setError] = useState<string | null>(null);
 
   const [lastKey, setLastKey] = useState("");
-  const key = open ? "new" : "closed";
+  const editKey = editing?._id.toString() ?? "";
+  const key = open ? (editing ? `edit-${editKey}` : "new") : "closed";
   if (key !== lastKey) {
     setLastKey(key);
-    setForm({
-      propertyId: "",
-      contractId: "",
-      category: "aidat",
-      amount: "",
-      date: TODAY,
-      paidByType: null,
-      personId: "",
-      description: "",
-    });
+    if (editing) {
+      setForm({
+        propertyId: editing.propertyId.toString(),
+        contractId: editing.contractId?.toString() ?? "",
+        category: editing.category,
+        amount: String(editing.amount),
+        date: dateToInput(editing.date),
+        paidByType: (editing.paidByType as any) ?? null,
+        personId: (editing.payerOwnerId?.toString() ?? editing.payerTenantId?.toString()) ?? "",
+        description: editing.description,
+      });
+    } else {
+      setForm({
+        propertyId: "",
+        contractId: "",
+        category: "aidat",
+        amount: "",
+        date: TODAY,
+        paidByType: null,
+        personId: "",
+        description: "",
+      });
+    }
     setError(null);
   }
 
@@ -496,7 +558,11 @@ function ExpenseFormDialog({
       setError("Masrafı yapan kişi seçilmelidir.");
       return;
     }
-    onSave(form);
+    if (editing && onUpdate) {
+      onUpdate(form);
+    } else {
+      onSave(form);
+    }
   };
 
   const payerOptions =

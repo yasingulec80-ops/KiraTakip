@@ -41,7 +41,7 @@ import {
   printReport,
 } from "@/lib/export";
 import { useAction, useMutation, useQuery } from "convex/react";
-import { CalendarClock, Mail, Settings2, Trash2 } from "lucide-react";
+import { CalendarClock, Mail, Pencil, Settings2, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { DialogShell, Field, Row } from "./fields";
@@ -89,6 +89,7 @@ export function AccrualSection() {
   const [to, setTo] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [deleting, setDeleting] = useState<Accrual | null>(null);
+  const [editingAccrual, setEditingAccrual] = useState<Accrual | null>(null);
   const [sendingReminders, setSendingReminders] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -379,7 +380,7 @@ export function AccrualSection() {
                     : undefined;
                   const status = a.status ?? "pending";
                   return (
-                    <TableRow key={a._id} className="align-middle">
+                    <TableRow key={a._id} className="align-middle cursor-pointer" onDoubleClick={() => setEditingAccrual(a)}>
                       <TableCell>
                         <div className="font-medium tabular-nums">{a.period}</div>
                         <div className="text-xs text-muted-foreground">

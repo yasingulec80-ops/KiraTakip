@@ -1,6 +1,6 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { getActor, getAuthorizedPropertyIds, requireActor, requirePropertyAccess } from "./ledger_helpers";
+import { getActor, getAuthorizedPropertyIds, postLedgerEntry, requireActor, requirePropertyAccess } from "./ledger_helpers";
 import { createCollectionWithLedger } from "./ledger_ops";
 import { deleteLedgerForReference } from "./ledger_helpers";
 import { refreshAccrualStatus } from "./accruals";
@@ -96,6 +96,78 @@ export const create = mutation({
       await refreshAccrualStatus(ctx, accrualId);
     }
     return collectionId;
+  },
+});
+
+/** Update a collection (admin only). Replaces old ledger entries and refreshes accrual. */
+export const update = mutation({
+  args: {
+    id: v.id("collections"),
+    amount: v.number(),
+    date: v.number(),
+    notes: v.optional(v.string()),
+    accrualId: v.optional(v.id("accruals")),
+  },
+  handler: async (ctx, args) => {
+    const actor = await requireActor(ctx);
+    const existing = await ctx.db.get(args.id);
+    if (!existing) throw new ConvexError("Tahsilat bulunamadı.");
+    await requirePropertyAccess(ctx, actor, existing.propertyId);
+
+    const contract = await ctx.db.get(existing.contractId);
+    if (!contract) throw new ConvexError("İlişkili kontrat bulunamadı.");
+
+    // Eski cari hesap kayıtlarını sil
+    const oldAccrualId = existing.accrualId;
+    await deleteLedgerForReference(ctx, args.id.toString());
+
+    // Güncelle
+    await ctx.db.patch(args.id, {
+      amount: args.amount,
+      date: args.date,
+      notes: args.notes,
+      accrualId: args.accrualId,
+    });
+
+    // Yeni cari hesap kayıtları oluştur
+    const actorType = existing.collectedByProxyOwnerId ? "proxy" : "office";
+    const personType = existing.paidByType === "proxy" ? "proxy" : "tenant";
+    const personId =
+      personType === "proxy" && existing.proxyOwnerId
+        ? existing.proxyOwnerId
+        : existing.tenantId;
+    if (personId) {
+      await postLedgerEntry(ctx, actor, {
+        propertyId: existing.propertyId,
+        contractId: existing.contractId,
+        personType,
+        personId,
+        kind: "collection",
+        amount: -args.amount,
+        description: `Tahsilat${existing.collectionType === "deposit" ? " (Depozito)" : ""}${args.notes ? ` · ${args.notes}` : ""}`,
+        date: args.date,
+        referenceId: args.id.toString(),
+      });
+      if (actorType === "proxy" && existing.collectedByProxyOwnerId) {
+        await postLedgerEntry(ctx, actor, {
+          propertyId: existing.propertyId,
+          contractId: existing.contractId,
+          personType: "proxy",
+          personId: existing.collectedByProxyOwnerId,
+          kind: "collection",
+          amount: args.amount,
+          description: `Vekil tahsilatı${existing.collectionType === "deposit" ? " (Depozito)" : ""}${args.notes ? ` · ${args.notes}` : ""}`,
+          date: args.date,
+          referenceId: args.id.toString(),
+        });
+      }
+    }
+
+    // Yeni tahakkuk durumunu yenile
+    const accrualId = args.accrualId ?? oldAccrualId;
+    if (accrualId) {
+      await refreshAccrualStatus(ctx, accrualId);
+    }
   },
 });
 
