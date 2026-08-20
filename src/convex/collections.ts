@@ -129,38 +129,58 @@ export const update = mutation({
       accrualId: args.accrualId,
     });
 
-    // Yeni cari hesap kayıtları oluştur
-    const actorType = existing.collectedByProxyOwnerId ? "proxy" : "office";
+    // Yeni cari hesap kayıtları oluştur — createCollectionWithLedger ile aynı kural.
+    const description = `Tahsilat${existing.collectionType === "deposit" ? " (Depozito)" : ""}${args.notes ? ` · ${args.notes}` : ""}`;
+
+    // Kiracı/Malik çifti: ödeme yapan alacaklanır (+), malik borçlanır (−)
     const personType = existing.paidByType === "proxy" ? "proxy" : "tenant";
     const personId =
       personType === "proxy" && existing.proxyOwnerId
         ? existing.proxyOwnerId
         : existing.tenantId;
     if (personId) {
+      // Ödeyen: alacak (+)
       await postLedgerEntry(ctx, actor, {
         propertyId: existing.propertyId,
         contractId: existing.contractId,
         personType,
         personId,
         kind: "collection",
-        amount: -args.amount,
-        description: `Tahsilat${existing.collectionType === "deposit" ? " (Depozito)" : ""}${args.notes ? ` · ${args.notes}` : ""}`,
+        amount: args.amount,
+        description,
         date: args.date,
         referenceId: args.id.toString(),
       });
-      if (actorType === "proxy" && existing.collectedByProxyOwnerId) {
-        await postLedgerEntry(ctx, actor, {
-          propertyId: existing.propertyId,
-          contractId: existing.contractId,
-          personType: "proxy",
-          personId: existing.collectedByProxyOwnerId,
-          kind: "collection",
-          amount: args.amount,
-          description: `Vekil tahsilatı${existing.collectionType === "deposit" ? " (Depozito)" : ""}${args.notes ? ` · ${args.notes}` : ""}`,
-          date: args.date,
-          referenceId: args.id.toString(),
-        });
-      }
+      // Malik: borç (−)
+      await postLedgerEntry(ctx, actor, {
+        propertyId: existing.propertyId,
+        contractId: existing.contractId,
+        personType: "owner",
+        personId: contract.ownerId,
+        kind: "collection",
+        amount: -args.amount,
+        description,
+        date: args.date,
+        referenceId: args.id.toString(),
+      });
+    }
+    // Tahsilatı yapan vekil: tahsil edilen tutar teslim edilene dek cari hesabında borç (−)
+    if (existing.collectedByProxyOwnerId) {
+      await postLedgerEntry(ctx, actor, {
+        propertyId: existing.propertyId,
+        contractId: existing.contractId,
+        personType: "proxy",
+        personId: existing.collectedByProxyOwnerId,
+        ownerId: existing.collectedByProxyOwnerId,
+        kind: "collection",
+        amount: -args.amount,
+        description:
+          existing.collectionType === "deposit"
+            ? "Vekil tahsilatı — depozito"
+            : "Vekil tahsilatı — kira",
+        date: args.date,
+        referenceId: args.id.toString(),
+      });
     }
 
     // Yeni tahakkuk durumunu yenile

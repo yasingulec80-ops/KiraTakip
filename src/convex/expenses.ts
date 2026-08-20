@@ -84,33 +84,49 @@ export const update = mutation({
       payerTenantId: args.payerTenantId,
     });
 
-    // Yeni cari hesap kaydı oluştur
+    // Yeni cari hesap kayıtları oluştur — expensePosts ile aynı kural.
+    const label = `Masraf — ${args.description || args.category}`;
     const paidByType = args.paidByType ?? "owner";
     if (paidByType === "owner" && args.payerOwnerId) {
+      // Malik öder → malik borçlanır (−)
       await postLedgerEntry(ctx, actor, {
         propertyId: existing.propertyId,
         contractId: existing.contractId,
         personType: "owner",
         personId: args.payerOwnerId,
         kind: "expense",
-        amount: args.amount,
-        description: args.description,
+        amount: -args.amount,
+        description: label,
         date: args.date,
         referenceId: args.id.toString(),
       });
     } else if (paidByType === "proxy" && args.payerOwnerId) {
+      // Vekil öder → vekil alacaklanır (+), malik borçlanır (−)
       await postLedgerEntry(ctx, actor, {
         propertyId: existing.propertyId,
         contractId: existing.contractId,
         personType: "proxy",
         personId: args.payerOwnerId,
+        ownerId: args.payerOwnerId,
         kind: "expense",
         amount: args.amount,
-        description: args.description,
+        description: label,
+        date: args.date,
+        referenceId: args.id.toString(),
+      });
+      await postLedgerEntry(ctx, actor, {
+        propertyId: existing.propertyId,
+        contractId: existing.contractId,
+        personType: "owner",
+        personId: args.payerOwnerId,
+        kind: "expense",
+        amount: -args.amount,
+        description: `${label} (vekil)`,
         date: args.date,
         referenceId: args.id.toString(),
       });
     } else if (paidByType === "tenant" && args.payerTenantId) {
+      // Kiracı öder → kiracı alacaklanır (+)
       await postLedgerEntry(ctx, actor, {
         propertyId: existing.propertyId,
         contractId: existing.contractId,
@@ -118,7 +134,7 @@ export const update = mutation({
         personId: args.payerTenantId,
         kind: "expense",
         amount: args.amount,
-        description: args.description,
+        description: label,
         date: args.date,
         referenceId: args.id.toString(),
       });
