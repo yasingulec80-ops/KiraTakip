@@ -66,13 +66,27 @@ export const reconcileAccrualLedgers = internalMutation({
         continue;
       }
 
-      if (accrual.dueDate <= now) {
+      // Vade gününü kontrat başlangıç gününe göre düzelt
+      // (eski kod her zaman ayın 1'ini kullanıyordu)
+      const startDay = new Date(contract.startDate).getDate();
+      const dueD = new Date(accrual.dueDate);
+      if (dueD.getDate() !== startDay) {
+        const corrected = new Date(dueD.getFullYear(), dueD.getMonth(), startDay);
+        // Ay taşıması olduysa (ör. 31 → 30 günlük ay) ayın son gününe düş
+        if (corrected.getDate() !== startDay) corrected.setDate(0);
+        const newDue = corrected.getTime();
+        const newPeriod = periodKey(newDue);
+        await ctx.db.patch(accrual._id, { dueDate: newDue, period: newPeriod });
+        dueD.setTime(newDue);
+      }
+
+      if (dueD.getTime() <= now) {
         // Vadesi gelmiş: cari kayıt yoksa kiracı/malik hesabına işle.
         if (accrualEntries.length === 0) {
           await postAccrualLedger(ctx, null, contract, {
             _id: accrual._id,
             period: accrual.period,
-            dueDate: accrual.dueDate,
+            dueDate: dueD.getTime(),
             amount: accrual.amount,
           }, accrual.type ?? "rent");
           posted += 1;
