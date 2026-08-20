@@ -27,7 +27,7 @@ const addMonthsStrict = (ts: number, months: number): number => {
   return target.getTime();
 };
 
-/** Kontrat bitiş tarihi — başlangıç gününü UTC koruyarak süre sonu (ms). */
+/** Kontrat bitiş tarihi — başlangıç yıldönümünden 1 gün önce (Türk hukuku). */
 export const contractEndMs = (
   startDate: number,
   durationMonths: number,
@@ -38,6 +38,7 @@ export const contractEndMs = (
   if (target.getUTCDate() !== day) {
     target.setUTCDate(0);
   }
+  target.setUTCDate(target.getUTCDate() - 1);
   return target.getTime();
 };
 

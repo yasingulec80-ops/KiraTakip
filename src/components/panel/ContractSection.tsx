@@ -178,12 +178,13 @@ const CSV_HEADERS = [
 
 const contractEnd = (start: number, months: number): number => {
   const d = new Date(start);
-  // Başlangıç gününü UTC koru; hedef ayda o gün yoksa ayın son gününe düş.
+  // Bitiş tarihi = başlangıç yıldönümünden 1 gün önce (Türk hukuku gereği)
   const day = d.getUTCDate();
   const target = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + months, day));
   if (target.getUTCDate() !== day) {
     target.setUTCDate(0);
   }
+  target.setUTCDate(target.getUTCDate() - 1);
   return target.getTime();
 };
 
@@ -2557,7 +2558,8 @@ function buildContractHtml(
           ${fieldRow("Adres", tenant?.address ?? "—")}
           ${fieldRow("E-posta", tenant?.email ?? "—")}
           ${fieldRow("Kiraya Veren", owner?.name ?? "—")}
-          ${fieldRow("TC Kimlik No", owner?.tcNo || "—")}
+          ${!owner?.isForeign ? fieldRow("TC Kimlik No", owner?.tcNo || "—") : ""}
+          ${owner?.isForeign && owner?.foreignId ? fieldRow("Yabancı Kimlik No", owner.foreignId) : ""}
           ${owner?.taxNumber ? fieldRow("Vergi No", owner.taxNumber) : ""}
           ${owner?.taxOffice ? fieldRow("Vergi Dairesi", owner.taxOffice) : ""}
           ${owner?.signatoryName ? fieldRow("İmza Yetkilisi", owner.signatoryName) : ""}
