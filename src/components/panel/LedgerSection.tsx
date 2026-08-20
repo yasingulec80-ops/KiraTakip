@@ -139,6 +139,15 @@ export function LedgerSection() {
     });
   }, [entries, from, to]);
 
+  // Malik hesabında vekilin yaptığı tahsilatları hariç tutan bakiye hesaplayıcı
+  const vekilCollectionRefs = useMemo(() => {
+    const set = new Set<string>();
+    (collections ?? [])
+      .filter((c) => c.collectedByProxyOwnerId)
+      .forEach((c) => set.add(c._id.toString()));
+    return set;
+  }, [collections]);
+
   const accounts = useMemo(() => {
     const accounts: PersonAccount[] = [];
     const balanceOf = (personType: PersonType, personId: string) =>
@@ -147,6 +156,13 @@ export function LedgerSection() {
           (e) =>
             e.personType === personType && e.personId.toString() === personId,
         )
+        .filter((e) => {
+          // Malik hesabında vekilin yaptığı tahsilatları hariç tut
+          if (personType === "owner" && e.kind === "collection" && e.referenceId && vekilCollectionRefs.has(e.referenceId)) {
+            return false;
+          }
+          return true;
+        })
         .reduce((sum, e) => sum + e.amount, 0);
 
     (owners ?? []).forEach((o) => {
@@ -196,26 +212,17 @@ export function LedgerSection() {
         }
         return a.name.localeCompare(b.name, "tr");
       });
-  }, [owners, tenants, rangeFilteredEntries, search]);
-
-  const entriesOf = (account: PersonAccount): LedgerEntry[] => {
+  }, [owners, tenants, rangeFilteredEntries, search, vekilCollectionRefs]);  const entriesOf = (account: PersonAccount): LedgerEntry[] => {
     let filtered = rangeFilteredEntries.filter(
       (e) =>
         e.personType === account.personType &&
         e.personId.toString() === account.personId,
     );
     // Malik hesabında vekilin yaptığı tahsilat kayıtlarını gösterme
-    if (account.personType === "owner" && collections) {
-      const vekilCollectionRefs = new Set(
-        collections
-          .filter((c) => c.collectedByProxyOwnerId)
-          .map((c) => c._id.toString()),
-      );
+    if (account.personType === "owner") {
       filtered = filtered.filter((e) => {
         if (
-          e.kind === "collection" &&
-          e.referenceId &&
-          vekilCollectionRefs.has(e.referenceId)
+          e.kind === "collection" && e.referenceId && vekilCollectionRefs.has(e.referenceId)
         ) {
           return false;
         }
