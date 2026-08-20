@@ -45,6 +45,15 @@ interface FixtureDraft {
   quantity: string;
 }
 
+const DEFAULT_FIXTURES: FixtureDraft[] = [
+  { name: "MUTFAK DOLABI", quantity: "1" },
+  { name: "DUŞAKABİN", quantity: "1" },
+  { name: "OCAK", quantity: "1" },
+  { name: "DAVLUMBAZ", quantity: "1" },
+  { name: "FIRIN", quantity: "1" },
+  { name: "KLIMA", quantity: "1" },
+];
+
 interface CoOwnerDraft {
   name: string;
   tcNo: string;
@@ -80,7 +89,7 @@ const emptyForm: PropertyFormState = {
   electricityMeter: "",
   waterMeter: "",
   gasMeter: "",
-  fixtures: [],
+  fixtures: [...DEFAULT_FIXTURES],
   notes: "",
 };
 
