@@ -6,6 +6,10 @@
  * bekleyen (henüz tahsil edilmemiş) depozitolar elde tutulan sayılmaz.
  * Kontrol paneli (Panel) ve Depozitolar modülü (DepositSection) bu yardımcıları
  * kullanır; tek kaynak olduğu için davranış iki ekranda birebir aynıdır.
+ *
+ * "Malike ödenen" hem depositOwnerPayment hem de kind:"transfer" (devir)
+ * kayıtlarını kapsar — vekil depozito devri yoluyla malike teslim edilen
+ * tutarlar da burada görünür.
  */
 
 export interface DepositContractLike {
@@ -25,6 +29,7 @@ export interface DepositLedgerLike {
   contractId?: unknown;
   kind?: string;
   amount: number;
+  description?: string;
 }
 
 export interface DepositDisposal {
@@ -43,6 +48,13 @@ export const DEPOSIT_STATUS_LABEL: Record<DepositStatus, string> = {
 };
 
 const idOf = (v: unknown): string => (v == null ? "" : String(v));
+
+/** Açıklamanın depozito devri/açıklaması içerip içermediğini kontrol eder. */
+const isDepositDescription = (description?: string): boolean => {
+  if (!description) return false;
+  const base = description.split(" \u00b7 ")[0].trim();
+  return base.toLocaleLowerCase("tr").includes("depozito");
+};
 
 /** Kontrat başına tahsil edilen depozito toplamı (yalnızca depozito türündeki tahsilatlar). */
 export const depositCollectedOf = (
@@ -75,6 +87,9 @@ export const depositDisposalOf = (
       disposal.paidToOwner += e.amount;
     } else if (e.kind === "depositWriteOff" && e.amount > 0) {
       disposal.writtenOff += e.amount;
+    } else if (e.kind === "transfer" && e.amount > 0 && isDepositDescription(e.description)) {
+      // Vekil depozito devri — malike teslim edilen depozito tutarı
+      disposal.paidToOwner += e.amount;
     }
   }
   return disposal;
