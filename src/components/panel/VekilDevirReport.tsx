@@ -194,6 +194,7 @@ export function VekilDevirReport() {
         vekilName: string;
         contracts: Map<string, ContractData>;
         rentTransfers: { amount: number; date: number }[]; // kontrata bağlı olmayan kira devirleri
+        depositTransfers: { amount: number; date: number }[]; // kontrata bağlı olmayan depozito devirleri
       }
     >();
     (owners ?? [])
@@ -204,6 +205,7 @@ export function VekilDevirReport() {
           vekilName: o.proxy?.name ?? "—",
           contracts: new Map<string, ContractData>(),
           rentTransfers: [],
+          depositTransfers: [],
         });
       });
 
@@ -240,9 +242,13 @@ export function VekilDevirReport() {
         else cd.collectedRent += Math.abs(e.amount);
       } else if (e.kind === "transfer") {
         if (e.contractId) {
-          // Depozito üzerinden iade (vekil) — doğrudan kontrata bağlı.
+          // Kontrata bağlı devir — depozito/kira ayrımı açıklamadan yapılır.
           const cd = ensureContract(e.contractId.toString(), e.date);
-          cd.depositTransfer += e.amount;
+          if (isDeposit) cd.depositTransfer += e.amount;
+          else cd.rentTransfer += e.amount;
+        } else if (isDeposit) {
+          // Genel depozito devri — en eski depozito tahsilatına göre kontratlara dağıtılır.
+          vd.depositTransfers.push({ amount: e.amount, date: e.date });
         } else {
           // Genel kira devri — en eski tahsilat öncelikli olarak kontratlara dağıtılır.
           vd.rentTransfers.push({ amount: e.amount, date: e.date });
@@ -274,6 +280,24 @@ export function VekilDevirReport() {
           remaining.set(cid, avail - take);
           const cd = vd.contracts.get(cid);
           if (cd) cd.rentTransfer += take;
+          left -= take;
+        }
+      }
+      // FIFO: kontrata bağlı olmayan depozito devirleri de en eski depozito
+      // tahsilatından başlayarak kontratlara dağıtılır.
+      const depositRemaining = new Map<string, number>();
+      ordered.forEach(({ cid, cd }) => depositRemaining.set(cid, cd.collectedDeposit));
+      const depTransfers = [...vd.depositTransfers].sort((a, b) => a.date - b.date);
+      for (const t of depTransfers) {
+        let left = t.amount;
+        for (const { cid } of ordered) {
+          if (left <= 0) break;
+          const avail = depositRemaining.get(cid) ?? 0;
+          if (avail <= 0) continue;
+          const take = Math.min(left, avail);
+          depositRemaining.set(cid, avail - take);
+          const cd = vd.contracts.get(cid);
+          if (cd) cd.depositTransfer += take;
           left -= take;
         }
       }
