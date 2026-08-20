@@ -680,8 +680,10 @@ function PersonDetailDialog({
   const collectedDeposit = vekilCollections.filter((e) =>
     transferIsDeposit(e.description),
   );
+  const proxyExpenses = entries.filter((e) => e.kind === "expense" && e.description.startsWith("Masraf —") && e.amount > 0);
+  const totalExpenses = proxyExpenses.reduce((s, e) => s + e.amount, 0);
   const hasVekilActivity =
-    transfers.length > 0 || vekilCollections.length > 0;
+    transfers.length > 0 || vekilCollections.length > 0 || totalExpenses > 0;
 
   return (
     <DialogShell
@@ -819,6 +821,12 @@ function PersonDetailDialog({
                 <p className="eyebrow text-muted-foreground">Depozito Devri</p>
                 <p className="mt-1 font-display text-sm font-medium tabular-nums">
                   {formatCurrency(depositTransfers.reduce((s, e) => s + e.amount, 0))}
+                </p>
+              </div>
+              <div className="bg-card p-3">
+                <p className="eyebrow text-muted-foreground">Toplam Masraf</p>
+                <p className="mt-1 font-display text-sm font-medium tabular-nums">
+                  {formatCurrency(totalExpenses)}
                 </p>
               </div>
             </div>
