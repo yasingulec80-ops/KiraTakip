@@ -776,7 +776,7 @@ function PersonDetailDialog({
                     : `-${formatCurrency(-balance)}`}
               </p>
             </div>
-            {ownerDeliverable && ownerDeliverable > 0 && (
+            {ownerDeliverable != null && ownerDeliverable > 0 && (
               <div className="relative overflow-hidden rounded-lg border border-brand/30 bg-brand/5 p-5">
                 <div className="flex items-center justify-between">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-brand/80">Teslim Edilebilir Kira</p>
