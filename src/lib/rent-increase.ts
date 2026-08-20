@@ -31,13 +31,18 @@ const addMonthsStrict = (ts: number, months: number): number => {
   ).getTime();
 };
 
-/** Kontrat bitiş tarihi — sürenin son ayının son günü (ms). */
+/** Kontrat bitiş tarihi — başlangıç gününü koruyarak süre sonu (ms). */
 export const contractEndMs = (
   startDate: number,
   durationMonths: number,
 ): number => {
   const d = new Date(startDate);
-  return new Date(d.getFullYear(), d.getMonth() + durationMonths, 0).getTime();
+  const target = new Date(d.getFullYear(), d.getMonth() + durationMonths, d.getDate());
+  // Ay taşıması olduysa (ör. 31 → 30 günlük ay) ayın son gününe düş.
+  if (target.getDate() !== d.getDate()) {
+    target.setDate(0);
+  }
+  return target.getTime();
 };
 
 /**

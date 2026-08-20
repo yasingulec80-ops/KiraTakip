@@ -37,14 +37,16 @@ describe("contractMonths", () => {
     ]);
   });
 
-  it("skips months before startDate (edge case: mid-month start)", () => {
-    // startDate = Jan 15 → i=0 produces Jan 1 which is < Jan 15 → skipped;
-    // i=1 produces Feb 1 which is >= Jan 15 → included.
+  it("preserves day of month from startDate for each accrual", () => {
+    // startDate = Jan 15 → i=0 produces Jan 15, i=1 produces Feb 15.
+    // Both are >= startDate, so both included.
     const start = new Date(2026, 0, 15).getTime();
     const months = contractMonths({ startDate: start, durationMonths: 2 });
-    expect(months).toHaveLength(1);
-    expect(months[0].period).toBe("2026-02");
-    expect(months[0].dueDate).toBeGreaterThanOrEqual(start);
+    expect(months).toHaveLength(2);
+    expect(months[0].period).toBe("2026-01");
+    expect(months[0].dueDate).toBe(new Date(2026, 0, 15).getTime());
+    expect(months[1].period).toBe("2026-02");
+    expect(months[1].dueDate).toBe(new Date(2026, 1, 15).getTime());
   });
 
   it("returns empty for 0 months", () => {

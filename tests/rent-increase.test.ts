@@ -26,9 +26,9 @@ describe("firstIncreaseDateOf", () => {
     expect(firstIncreaseDateOf(ms(2026, 7, 1), 24)).toBe(msMidnight(2027, 7, 1));
   });
 
-  test("12 aylık kontratta ilk artış bitişten sonraya denk gelir → null", () => {
-    // Bitiş 2027-06-30; ilk yıldönümü 2027-07-01 → kontrat içinde artış yok.
-    expect(firstIncreaseDateOf(ms(2026, 7, 1), 12)).toBeNull();
+  test("12 aylık kontratta ilk artış bitiş tarihiyle aynı gün → artış geçerli", () => {
+    // Bitiş 2027-08-01 (gün korunuyor); ilk yıldönümü 2027-08-01 → kontrat içinde.
+    expect(firstIncreaseDateOf(ms(2026, 7, 1), 12)).toBe(msMidnight(2027, 7, 1));
   });
 });
 

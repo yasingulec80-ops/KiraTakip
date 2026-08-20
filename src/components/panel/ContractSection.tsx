@@ -178,7 +178,13 @@ const CSV_HEADERS = [
 
 const contractEnd = (start: number, months: number): number => {
   const d = new Date(start);
-  return new Date(d.getFullYear(), d.getMonth() + months, 0).getTime();
+  // Başlangıç gününü koru; hedef ayda o gün yoksa ayın son gününe düş.
+  const target = new Date(d.getFullYear(), d.getMonth() + months, d.getDate());
+  if (target.getDate() !== d.getDate()) {
+    // Ay taşıması oldu (ör. 31 → 30 günlük ay), ayın son gününe ayarla.
+    target.setDate(0);
+  }
+  return target.getTime();
 };
 
 /** Kira kontratına otomatik eklenen genel koşullar (madde metinleri). */

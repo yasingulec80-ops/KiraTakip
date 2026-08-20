@@ -22,7 +22,8 @@ export const periodKey = (ts: number): string => {
 
 const addMonths = (ts: number, months: number): number => {
   const d = new Date(ts);
-  return new Date(d.getFullYear(), d.getMonth() + months, 1).getTime();
+  // Orijinal gün numarasını koru (ör. 6 => her ayın 6'sı)
+  return new Date(d.getFullYear(), d.getMonth() + months, d.getDate()).getTime();
 };
 
 /** Monthly accrual rows for the contract's full duration.
