@@ -78,6 +78,7 @@ interface SummaryRow {
 }
 
 interface DetailRow extends SummaryRow {
+  propertyId: string;
   propertyName: string;
   contractLabel: string;
 }
@@ -322,6 +323,7 @@ export function VekilDevirReport() {
           ownerId,
           ownerName: vd.ownerName,
           vekilName: vd.vekilName,
+          propertyId: property?._id.toString() ?? "",
           propertyName: property?.name ?? "—",
           contractLabel: contract
             ? `${tenant?.name ?? "Kiracı"} · ${formatDate(contract.startDate)}`
@@ -391,14 +393,16 @@ export function VekilDevirReport() {
     summaryTotals.vekilAlacak,
   );
 
-  // Gayrimenkul bazında toplamlar — detailRows'ı propertyName'e göre gruplar.
+  // Gayrimenkul bazında toplamlar — detailRows'ı propertyId'ye göre gruplar.
   const propertyRows = useMemo(() => {
     const map = new Map<string, PropertyRow>();
     for (const r of detailRows) {
-      let entry = map.get(r.propertyName);
+      // Same property ID → merge; fallback to name for entries without a propertyId
+      const key = r.propertyId || r.propertyName;
+      let entry = map.get(key);
       if (!entry) {
         entry = {
-          propertyId: r.propertyName,
+          propertyId: key,
           propertyName: r.propertyName,
           vekilName: r.vekilName,
           collectedRent: 0,
@@ -408,7 +412,11 @@ export function VekilDevirReport() {
           vekilAlacak: 0,
           masraf: 0,
         };
-        map.set(r.propertyName, entry);
+        map.set(key, entry);
+      }
+      // Use the real property name if we have one (upgrade from "—")
+      if (entry.propertyName === "—" && r.propertyName !== "—") {
+        entry.propertyName = r.propertyName;
       }
       entry.collectedRent += r.collectedRent;
       entry.collectedDeposit += r.collectedDeposit;
@@ -427,10 +435,11 @@ export function VekilDevirReport() {
       if (!proxyOwnerIds.has(exp.payerOwnerId.toString())) continue;
       const prop = propertyMap.get(exp.propertyId.toString());
       if (!prop) continue;
-      let entry = map.get(prop.name);
+      const expKey = prop._id.toString();
+      let entry = map.get(expKey);
       if (!entry) {
         entry = {
-          propertyId: prop._id.toString(),
+          propertyId: expKey,
           propertyName: prop.name,
           vekilName: "",
           collectedRent: 0,
@@ -440,7 +449,7 @@ export function VekilDevirReport() {
           vekilAlacak: 0,
           masraf: 0,
         };
-        map.set(prop.name, entry);
+        map.set(expKey, entry);
       }
       entry.masraf += exp.amount;
     }
