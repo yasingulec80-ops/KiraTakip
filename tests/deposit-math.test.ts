@@ -154,4 +154,21 @@ describe("depositTotalsOf", () => {
     expect(totals.writtenOff).toBe(3_000);
     expect(totals.pending).toBe(0);
   });
+
+  test("kontratsız depozito devri (transfer) malike teslim edilene eklenir", () => {
+    const contracts = [contract("c1", 20_000)];
+    const collections = [collection("c1", 20_000)];
+    const entries = [
+      // Kontrata bağlı depositOwnerPayment
+      entry("c1", "depositOwnerPayment", 5_000),
+      // Kontratsız depozito devri (vekil devri)
+      { contractId: undefined, kind: "transfer", amount: 10_000, description: "Vekil devri — depozito teslimi" },
+      // Kontratsız kira devri — depozito sayılmaz
+      { contractId: undefined, kind: "transfer", amount: 8_000, description: "Vekil devri — tahsilat teslimi" },
+    ];
+    const totals = depositTotalsOf(contracts, collections, entries);
+    // 5.000 (depositOwnerPayment) + 10.000 (contractless deposit transfer) = 15.000
+    expect(totals.paidToOwner).toBe(15_000);
+    expect(totals.held).toBe(5_000); // 20.000 - 5.000 - 10.000 = 5.000
+  });
 });

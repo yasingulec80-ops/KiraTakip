@@ -87,9 +87,6 @@ export const depositDisposalOf = (
       disposal.paidToOwner += e.amount;
     } else if (e.kind === "depositWriteOff" && e.amount > 0) {
       disposal.writtenOff += e.amount;
-    } else if (e.kind === "transfer" && e.amount > 0 && isDepositDescription(e.description)) {
-      // Vekil depozito devri — malike teslim edilen depozito tutarı
-      disposal.paidToOwner += e.amount;
     }
   }
   return disposal;
@@ -177,5 +174,20 @@ export const depositTotalsOf = (
     }
     if (held > 0) totals.heldCount += 1;
   }
+
+  // Kontrata bağlı olmayan depozito devir kayıtları (vekil devri) — toplam
+  // malike teslim edilen tutara eklenir. Bu kayıtlar contractId içermez,
+  // bu yüzden yukarıdaki döngüde depositDisposalOf tarafından yakalanmaz.
+  // Elde tutulan tutardan da düşülür.
+  let contractlessDepositTransfer = 0;
+  for (const e of entries) {
+    if (e.contractId) continue;
+    if (e.kind === "transfer" && e.amount > 0 && isDepositDescription(e.description)) {
+      contractlessDepositTransfer += e.amount;
+    }
+  }
+  totals.paidToOwner += contractlessDepositTransfer;
+  totals.held = Math.max(0, totals.held - contractlessDepositTransfer);
+
   return totals;
 };
