@@ -81,6 +81,9 @@ export const reconcileAccrualLedgers = internalMutation({
         dueD.setTime(newDue);
       }
 
+      // Durumu yenile — tahsilat kayıtlarına göre pending/partial/paid
+      await refreshAccrualStatus(ctx, accrual._id);
+
       if (dueD.getTime() <= now) {
         // Vadesi gelmiş: cari kayıt yoksa kiracı/malik hesabına işle.
         if (accrualEntries.length === 0) {
