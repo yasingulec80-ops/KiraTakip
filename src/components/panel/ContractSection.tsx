@@ -178,11 +178,11 @@ const CSV_HEADERS = [
 
 const contractEnd = (start: number, months: number): number => {
   const d = new Date(start);
-  // Başlangıç gününü koru; hedef ayda o gün yoksa ayın son gününe düş.
-  const target = new Date(d.getFullYear(), d.getMonth() + months, d.getDate());
-  if (target.getDate() !== d.getDate()) {
-    // Ay taşıması oldu (ör. 31 → 30 günlük ay), ayın son gününe ayarla.
-    target.setDate(0);
+  // Başlangıç gününü UTC koru; hedef ayda o gün yoksa ayın son gününe düş.
+  const day = d.getUTCDate();
+  const target = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + months, day));
+  if (target.getUTCDate() !== day) {
+    target.setUTCDate(0);
   }
   return target.getTime();
 };

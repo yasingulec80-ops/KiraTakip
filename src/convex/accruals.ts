@@ -68,12 +68,13 @@ export const reconcileAccrualLedgers = internalMutation({
 
       // Vade gününü kontrat başlangıç gününe göre düzelt
       // (eski kod her zaman ayın 1'ini kullanıyordu)
-      const startDay = new Date(contract.startDate).getDate();
+      // UTC kullanılır — Convex sunucusu UTC'de çalışır
+      const startDay = new Date(contract.startDate).getUTCDate();
       const dueD = new Date(accrual.dueDate);
-      if (dueD.getDate() !== startDay) {
-        const corrected = new Date(dueD.getFullYear(), dueD.getMonth(), startDay);
+      if (dueD.getUTCDate() !== startDay) {
+        const corrected = new Date(Date.UTC(dueD.getUTCFullYear(), dueD.getUTCMonth(), startDay));
         // Ay taşıması olduysa (ör. 31 → 30 günlük ay) ayın son gününe düş
-        if (corrected.getDate() !== startDay) corrected.setDate(0);
+        if (corrected.getUTCDate() !== startDay) corrected.setUTCDate(0);
         const newDue = corrected.getTime();
         const newPeriod = periodKey(newDue);
         await ctx.db.patch(accrual._id, { dueDate: newDue, period: newPeriod });

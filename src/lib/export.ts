@@ -28,13 +28,13 @@ export const parseNumber = (value: string): number | undefined => {
 export const dateToInput = (ts: number): string => {
   const d = new Date(ts);
   const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}`;
 };
 
 /** Convert a date-input value to a timestamp at local midnight. */
 export const parseDateInput = (value: string): number | undefined => {
   if (!value) return undefined;
-  const ts = new Date(`${value}T00:00:00`).getTime();
+  const ts = new Date(`${value}T00:00:00Z`).getTime(); // UTC olarak-parse et
   return Number.isFinite(ts) ? ts : undefined;
 };
 

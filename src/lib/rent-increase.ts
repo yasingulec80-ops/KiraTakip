@@ -18,29 +18,25 @@ const DAY_MS = 86_400_000;
 /** Ay eklerken gün taşmasını önler (örn. 31 Ocak + 1 ay → 28 Şubat). */
 const addMonthsStrict = (ts: number, months: number): number => {
   const d = new Date(ts);
-  const target = new Date(d.getFullYear(), d.getMonth() + months, 1);
-  const lastDay = new Date(
-    target.getFullYear(),
-    target.getMonth() + 1,
-    0,
-  ).getDate();
-  return new Date(
-    target.getFullYear(),
-    target.getMonth(),
-    Math.min(d.getDate(), lastDay),
-  ).getTime();
+  const day = d.getUTCDate();
+  const target = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + months, day));
+  // Ay taşıması olduysa (ör. 31 → 28 Şubat) ayın son gününe düş
+  if (target.getUTCDate() !== day) {
+    target.setUTCDate(0);
+  }
+  return target.getTime();
 };
 
-/** Kontrat bitiş tarihi — başlangıç gününü koruyarak süre sonu (ms). */
+/** Kontrat bitiş tarihi — başlangıç gününü UTC koruyarak süre sonu (ms). */
 export const contractEndMs = (
   startDate: number,
   durationMonths: number,
 ): number => {
   const d = new Date(startDate);
-  const target = new Date(d.getFullYear(), d.getMonth() + durationMonths, d.getDate());
-  // Ay taşıması olduysa (ör. 31 → 30 günlük ay) ayın son gününe düş.
-  if (target.getDate() !== d.getDate()) {
-    target.setDate(0);
+  const day = d.getUTCDate();
+  const target = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + durationMonths, day));
+  if (target.getUTCDate() !== day) {
+    target.setUTCDate(0);
   }
   return target.getTime();
 };
