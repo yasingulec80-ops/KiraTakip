@@ -2544,18 +2544,20 @@ function buildContractHtml(
         <div>
           ${fieldRow("Kiracı", tenant?.name ?? "—")}
           ${
-            tenant?.isCompany
-              ? `${fieldRow("Vergi No", tenant?.taxNumber || tenant?.tcNo || "—")}${tenant?.taxOffice ? fieldRow("Vergi Dairesi", tenant.taxOffice) : ""}${tenant?.signatoryName ? fieldRow("İmza Yetkilisi", tenant.signatoryName) : ""}`
-              : fieldRow("TC Kimlik No", tenant?.tcNo ?? "—")
+            (tenant?.taxNumber ? fieldRow("Vergi No", tenant.taxNumber) : "") +
+            (tenant?.tcNo ? fieldRow("TC Kimlik No", tenant.tcNo) : "") +
+            (tenant?.taxOffice ? fieldRow("Vergi Dairesi", tenant.taxOffice) : "") +
+            (tenant?.signatoryName ? fieldRow("İmza Yetkilisi", tenant.signatoryName) : "")
           }
           ${fieldRow("Telefon", tenant?.phone ?? "—")}
           ${fieldRow("Adres", tenant?.address ?? "—")}
           ${fieldRow("E-posta", tenant?.email ?? "—")}
           ${fieldRow("Kiraya Veren", owner?.name ?? "—")}
           ${
-            owner?.isCompany
-              ? `${fieldRow("Vergi No", owner?.taxNumber || owner?.tcNo || "—")}${owner?.taxOffice ? fieldRow("Vergi Dairesi", owner.taxOffice) : ""}${owner?.signatoryName ? fieldRow("İmza Yetkilisi", owner.signatoryName) : ""}`
-              : fieldRow("TC Kimlik No", owner?.tcNo ?? "—")
+            (owner?.taxNumber ? fieldRow("Vergi No", owner.taxNumber) : "") +
+            (owner?.tcNo ? fieldRow("TC Kimlik No", owner.tcNo) : "") +
+            (owner?.taxOffice ? fieldRow("Vergi Dairesi", owner.taxOffice) : "") +
+            (owner?.signatoryName ? fieldRow("İmza Yetkilisi", owner.signatoryName) : "")
           }
           ${fieldRow("Telefon", owner?.phone ?? "—")}
           ${
