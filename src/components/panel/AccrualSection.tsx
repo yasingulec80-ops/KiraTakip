@@ -426,16 +426,28 @@ export function AccrualSection() {
                       </TableCell>
                       <TableCell className="text-right">
                         {isAdmin && (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 rounded-none text-muted-foreground hover:text-destructive"
-                            onClick={() => setDeleting(a)}
-                            aria-label="Tahakkuku sil"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 rounded-none text-muted-foreground hover:text-foreground"
+                              onClick={(ev) => { ev.stopPropagation(); setEditingAccrual(a); }}
+                              aria-label="Tahakkuk detayı"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 rounded-none text-muted-foreground hover:text-destructive"
+                              onClick={(ev) => { ev.stopPropagation(); setDeleting(a); }}
+                              aria-label="Tahakkuku sil"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         )}
                       </TableCell>
                     </TableRow>

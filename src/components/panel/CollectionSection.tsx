@@ -461,6 +461,7 @@ export function CollectionSection() {
         owners={owners ?? []}
         accruals={accruals ?? []}
         onSave={handleSave}
+        onUpdate={handleUpdate}
       />
 
       <AlertDialog open={deleting !== null} onOpenChange={(open) => !open && setDeleting(null)}>
