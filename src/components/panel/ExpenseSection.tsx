@@ -359,16 +359,28 @@ export function ExpenseSection() {
                         </TableCell>
                         <TableCell className="text-right">
                           {isAdmin && (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 rounded-none text-muted-foreground hover:text-destructive"
-                              onClick={() => setDeleting(e)}
-                              aria-label="Masrafı sil"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            <div className="flex items-center justify-end gap-1">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 rounded-none text-muted-foreground hover:text-foreground"
+                                onClick={() => { setEditing(e); setFormOpen(true); }}
+                                aria-label="Masrafı düzenle"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 rounded-none text-muted-foreground hover:text-destructive"
+                                onClick={() => setDeleting(e)}
+                                aria-label="Masrafı sil"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
                           )}
                         </TableCell>
                       </TableRow>
@@ -578,7 +590,7 @@ function ExpenseFormDialog({
     <DialogShell
       open={open}
       onOpenChange={onOpenChange}
-      title="Masraf Kaydı"
+      title={editing ? "Masraf Güncelle" : "Masraf Kaydı"}
       description="Masrafı yapan seçilir; kayıt seçilen kişinin cari hesabına işlenir."
       wide
       footer={
