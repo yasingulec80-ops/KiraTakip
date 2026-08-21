@@ -2558,7 +2558,7 @@ function buildContractHtml(
           ${fieldRow("Adres", tenant?.address ?? "—")}
           ${fieldRow("E-posta", tenant?.email ?? "—")}
           ${fieldRow("Kiraya Veren", owner?.name ?? "—")}
-          ${!owner?.isForeign ? fieldRow("TC Kimlik No", owner?.tcNo || "—") : ""}
+          ${owner?.tcNo ? fieldRow("TC Kimlik No", owner.tcNo) : ""}
           ${owner?.isForeign && owner?.foreignId ? fieldRow("Yabancı Kimlik No", owner.foreignId) : ""}
           ${owner?.taxNumber ? fieldRow("Vergi No", owner.taxNumber) : ""}
           ${owner?.taxOffice ? fieldRow("Vergi Dairesi", owner.taxOffice) : ""}
