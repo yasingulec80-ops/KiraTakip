@@ -2559,7 +2559,7 @@ function buildContractHtml(
           ${fieldRow("E-posta", tenant?.email ?? "—")}
           ${fieldRow("Kiraya Veren", owner?.name ?? "—")}
           ${owner?.tcNo ? fieldRow("TC Kimlik No", owner.tcNo) : ""}
-          ${owner?.isForeign && owner?.foreignId ? fieldRow("Yabancı Kimlik No", owner.foreignId) : ""}
+          ${owner?.isForeign && owner?.foreignId ? fieldRow("Yabancı Kimlik No / Vergi No", owner.foreignId) : ""}
           ${owner?.taxNumber ? fieldRow("Vergi No", owner.taxNumber) : ""}
           ${owner?.taxOffice ? fieldRow("Vergi Dairesi", owner.taxOffice) : ""}
           ${owner?.signatoryName ? fieldRow("İmza Yetkilisi", owner.signatoryName) : ""}
