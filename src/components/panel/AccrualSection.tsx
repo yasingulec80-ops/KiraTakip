@@ -79,6 +79,7 @@ export function AccrualSection() {
   const properties = useQuery(api.properties.list);
   const tenants = useQuery(api.tenants.list);
   const createAccrual = useMutation(api.accruals.create);
+  const updateAccrual = useMutation(api.accruals.update);
   const removeAccrual = useMutation(api.accruals.remove);
   const sendReminders = useAction(api.reminders.sendRentReminders);
   const reminderSettings = useQuery(api.settings.getReminderSettings);
@@ -222,13 +223,23 @@ export function AccrualSection() {
       return;
     }
     try {
-      await createAccrual({
-        contractId: form.contractId as Id<"contracts">,
-        amount: parseNumber(form.amount) ?? 0,
-        dueDate,
-      });
-      toast.success("Tahakkuk oluşturuldu ve cari hesaba işlendi.");
+      if (editingAccrual) {
+        await updateAccrual({
+          id: editingAccrual._id,
+          amount: parseNumber(form.amount) ?? 0,
+          dueDate,
+        });
+        toast.success("Tahakkuk güncellendi ve cari hesap yeniden işlendi.");
+      } else {
+        await createAccrual({
+          contractId: form.contractId as Id<"contracts">,
+          amount: parseNumber(form.amount) ?? 0,
+          dueDate,
+        });
+        toast.success("Tahakkuk oluşturuldu ve cari hesaba işlendi.");
+      }
       setFormOpen(false);
+      setEditingAccrual(null);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "İşlem başarısız.");
     }
@@ -380,7 +391,7 @@ export function AccrualSection() {
                     : undefined;
                   const status = a.status ?? "pending";
                   return (
-                    <TableRow key={a._id} className="align-middle cursor-pointer" onDoubleClick={() => setEditingAccrual(a)}>
+                    <TableRow key={a._id} className="align-middle cursor-pointer" onDoubleClick={() => { setEditingAccrual(a); setFormOpen(true); }}>
                       <TableCell>
                         <div className="font-medium tabular-nums">{a.period}</div>
                         <div className="text-xs text-muted-foreground">
@@ -432,8 +443,8 @@ export function AccrualSection() {
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8 rounded-none text-muted-foreground hover:text-foreground"
-                              onClick={(ev) => { ev.stopPropagation(); setEditingAccrual(a); }}
-                              aria-label="Tahakkuk detayı"
+                              onClick={(ev) => { ev.stopPropagation(); setEditingAccrual(a); setFormOpen(true); }}
+                              aria-label="Tahakkuku düzenle"
                             >
                               <Pencil className="h-4 w-4" />
                             </Button>
@@ -477,10 +488,14 @@ export function AccrualSection() {
 
       <AccrualFormDialog
         open={formOpen}
-        onOpenChange={setFormOpen}
+        onOpenChange={(open) => {
+          setFormOpen(open);
+          if (!open) setEditingAccrual(null);
+        }}
         contracts={contracts ?? []}
         propertyMap={propertyMap}
         tenantMap={tenantMap}
+        editingAccrual={editingAccrual}
         onSave={handleSave}
       />
 
@@ -531,6 +546,7 @@ function AccrualFormDialog({
   contracts,
   propertyMap,
   tenantMap,
+  editingAccrual,
   onSave,
 }: {
   open: boolean;
@@ -538,6 +554,7 @@ function AccrualFormDialog({
   contracts: Contract[];
   propertyMap: Map<string, Property>;
   tenantMap: Map<string, Tenant>;
+  editingAccrual?: Accrual | null;
   onSave: (form: AccrualFormState) => void;
 }) {
   const [form, setForm] = useState<AccrualFormState>({
@@ -548,14 +565,23 @@ function AccrualFormDialog({
   const [error, setError] = useState<string | null>(null);
 
   const [lastKey, setLastKey] = useState("");
-  const key = open ? "new" : "closed";
+  const isEdit = editingAccrual !== null && editingAccrual !== undefined;
+  const key = open ? (isEdit ? `edit-${editingAccrual._id}` : "new") : "closed";
   if (key !== lastKey) {
     setLastKey(key);
-    setForm({
-      contractId: "",
-      amount: "",
-      dueDate: TODAY,
-    });
+    if (isEdit) {
+      setForm({
+        contractId: editingAccrual.contractId.toString(),
+        amount: String(editingAccrual.amount),
+        dueDate: dateToInput(editingAccrual.dueDate),
+      });
+    } else {
+      setForm({
+        contractId: "",
+        amount: "",
+        dueDate: TODAY,
+      });
+    }
     setError(null);
   }
 
@@ -580,8 +606,8 @@ function AccrualFormDialog({
     <DialogShell
       open={open}
       onOpenChange={onOpenChange}
-      title="Tahakkuk Oluştur"
-      description="Seçilen kontrat için elle tahakkuk oluşturulur ve cari hesaplara işlenir."
+      title={isEdit ? "Tahakkuk Güncelle" : "Tahakkuk Oluştur"}
+      description={isEdit ? "Tahakkuk tutarı ve vade tarihi güncellenir." : "Seçilen kontrat için elle tahakkuk oluşturulur ve cari hesaplara işlenir."}
       footer={
         <>
           <Button
@@ -593,7 +619,7 @@ function AccrualFormDialog({
             Vazgeç
           </Button>
           <Button type="button" className="rounded-none" onClick={submit}>
-            Oluştur
+            {isEdit ? "Güncelle" : "Oluştur"}
           </Button>
         </>
       }

@@ -142,6 +142,44 @@ export const create = mutation({
 });
 
 /** Remove an accrual (admin only). Cleans up ledger entries. */
+export const update = mutation({
+  args: {
+    id: v.id("accruals"),
+    amount: v.number(),
+    dueDate: v.number(),
+  },
+  handler: async (ctx, { id, amount, dueDate }) => {
+    const actor = await requireActor(ctx);
+    const accrual = await ctx.db.get(id);
+    if (!accrual) throw new ConvexError("Tahakkuk bulunamadı.");
+    await requirePropertyAccess(ctx, actor, accrual.propertyId);
+
+    const newPeriod = periodKey(dueDate);
+
+    // Eski cari kayıtları sil
+    await deleteLedgerForReference(ctx, id.toString());
+
+    // Tahakkuku güncelle
+    await ctx.db.patch(id, { amount, dueDate, period: newPeriod });
+
+    // Yeni vade geldiyse cari kayıtları yeniden oluştur
+    if (dueDate <= Date.now()) {
+      const contract = await ctx.db.get(accrual.contractId);
+      if (contract) {
+        await postAccrualLedger(ctx, actor, contract, {
+          _id: id,
+          period: newPeriod,
+          dueDate,
+          amount,
+        }, accrual.type ?? "rent");
+      }
+    }
+
+    // Durumu yenile
+    await refreshAccrualStatus(ctx, id);
+  },
+});
+
 export const remove = mutation({
   args: { id: v.id("accruals") },
   handler: async (ctx, { id }) => {

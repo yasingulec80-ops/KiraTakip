@@ -300,6 +300,37 @@ export const removeEntry = mutation({
     if (entry.propertyId) {
       await requirePropertyAccess(ctx, actor, entry.propertyId);
     }
+
+    // Depozito ile ilgili bir kayıt siliniyorsa kontratın depozito durumunu temizle
+    if (entry.contractId && (
+      entry.kind === "depositReturn" ||
+      entry.kind === "depositOwnerPayment" ||
+      entry.kind === "depositWriteOff"
+    )) {
+      const contract = await ctx.db.get(entry.contractId);
+      if (contract) {
+        // Kontrattaki depozito ile ilgili diğer kayıtları kontrol et
+        const otherEntries = await ctx.db
+          .query("ledgerEntries")
+          .collect();
+        const hasOtherDepositEntries = otherEntries.some(
+          (e) => e.contractId?.toString() === entry.contractId!.toString() &&
+            e._id !== id && (
+            e.kind === "depositReturn" ||
+            e.kind === "depositOwnerPayment" ||
+            e.kind === "depositWriteOff"
+          ),
+        );
+        // Başka depozito kaydı yoksa durumu temizle
+        if (!hasOtherDepositEntries) {
+          await ctx.db.patch(entry.contractId, {
+            depositStatus: undefined,
+            depositReturnedAt: undefined,
+          });
+        }
+      }
+    }
+
     await ctx.db.delete(id);
   },
 });
